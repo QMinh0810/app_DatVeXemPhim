@@ -1,0 +1,46 @@
+﻿Analyzing app_DatVeXemPhim...                                   
+
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\account_info_screen.dart:99:38 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\account_info_screen.dart:99:59 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\account_info_screen.dart:102:38 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\account_info_screen.dart:102:59 - deprecated_member_use
+warning - Unused import: '../widgets/feature_grid.dart' - lib\screens\home_screen.dart:3:8 - unused_import
+  error - The argument type 'Image' can't be assigned to the parameter type 'String'.  - lib\screens\movie_list_screen.dart:35:19 - argument_type_not_assignable
+  error - Too many positional arguments: 0 expected, but 2 found - lib\screens\movie_list_screen.dart:48:17 - extra_positional_arguments_could_be_named
+  error - The named parameter 'child' is required, but there's no corresponding argument - lib\screens\movie_list_screen.dart:91:32 - missing_required_argument
+  error - Too many positional arguments: 0 expected, but 2 found - lib\screens\movie_list_screen.dart:100:19 - extra_positional_arguments_could_be_named
+  error - Expected to find ')' - lib\screens\movie_list_screen.dart:162:17 - expected_token
+  error - Expected to find ')' - lib\screens\movie_list_screen.dart:163:16 - expected_token
+  error - Expected to find ']' - lib\screens\movie_list_screen.dart:163:16 - expected_token
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\my_tickets_screen.dart:55:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\my_tickets_screen.dart:68:61 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\payment_screen.dart:43:52 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\register_screen.dart:70:40 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\register_screen.dart:70:61 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\register_screen.dart:73:40 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\screens\register_screen.dart:73:61 - deprecated_member_use
+   info - Statements in an if should be enclosed in a block - lib\screens\seat_selection_screen.dart:24:19 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\seat_selection_screen.dart:25:26 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\seat_selection_screen.dart:26:21 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\seat_selection_screen.dart:27:24 - curly_braces_in_flow_control_structures
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\transaction_history_screen.dart:61:46 - deprecated_member_use
+   info - The private field _selectedSeats could be 'final' - lib\viewmodels\booking_viewmodel.dart:8:16 - prefer_final_fields
+warning - The declaration '_startTimer' isn't referenced - lib\widgets\promo_slider.dart:28:8 - unused_element
+
+flutter : 26 issues 
+found. (ran in 2.6s)
+At line:1 char:1
++ flutter analyze 2>&1 | 
+Out-File -FilePath 
+analyze_output.txt 
+-Encodin ...
++ ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (2  
+  6 issues found. (ran    
+ in 2.6s):String) [],     
+RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 

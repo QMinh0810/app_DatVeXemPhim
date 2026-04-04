@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
-import '../screens/seat_selection_screen.dart';
+import 'package:provider/provider.dart';
+import '../models/movie_model.dart';
+import '../viewmodels/booking_viewmodel.dart';
+import '../screens/showtime_screen.dart';
 
 class MovieCard extends StatelessWidget {
   final String title;
   final String rating;
   final String imageUrl;
+  final MovieModel? movie;
 
   const MovieCard({
     super.key,
     required this.title,
     required this.rating,
     required this.imageUrl,
+    this.movie,
   });
 
   @override
@@ -86,10 +91,13 @@ class MovieCard extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
+                if (movie != null) {
+                  context.read<BookingViewModel>().selectMovie(movie!);
+                }
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const SeatSelectionScreen(),
+                    builder: (context) => const ShowtimeScreen(),
                   ),
                 );
               },
@@ -110,3 +118,4 @@ class MovieCard extends StatelessWidget {
     );
   }
 }
+

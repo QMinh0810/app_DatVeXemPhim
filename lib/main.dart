@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'screens/login_screen.dart';
+import 'viewmodels/auth_viewmodel.dart';
+import 'viewmodels/movie_viewmodel.dart';
+import 'viewmodels/booking_viewmodel.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthViewModel()),
+        ChangeNotifierProvider(create: (_) => MovieViewModel()),
+        ChangeNotifierProvider(create: (_) => BookingViewModel()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {

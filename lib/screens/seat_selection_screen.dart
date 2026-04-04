@@ -1,21 +1,17 @@
 import 'package:flutter/material.dart';
-import 'payment_screen.dart'; // We will skip combo and go to payment
+import 'package:provider/provider.dart';
+import '../viewmodels/booking_viewmodel.dart';
+import 'payment_screen.dart'; 
 
-class SeatSelectionScreen extends StatefulWidget {
+class SeatSelectionScreen extends StatelessWidget {
   const SeatSelectionScreen({super.key});
 
-  @override
-  State<SeatSelectionScreen> createState() => _SeatSelectionScreenState();
-}
-
-class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   final int rows = 8;
   final int cols = 8;
-  final List<String> selectedSeats = [];
 
-  Widget _buildSeat(int row, int col) {
+  Widget _buildSeat(BuildContext context, BookingViewModel bookingVM, int row, int col) {
     String seatName = '${String.fromCharCode(65 + row)}${col + 1}';
-    bool isSelected = selectedSeats.contains(seatName);
+    bool isSelected = bookingVM.selectedSeats.contains(seatName);
 
     // Mock booked seats
     bool isBooked = (row == 3 && (col == 3 || col == 4));
@@ -32,13 +28,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
     return GestureDetector(
       onTap: isBooked ? null : () {
-        setState(() {
-          if (isSelected) {
-            selectedSeats.remove(seatName);
-          } else {
-            selectedSeats.add(seatName);
-          }
-        });
+        bookingVM.toggleSeat(seatName);
       },
       child: Container(
         margin: const EdgeInsets.all(4),
@@ -57,108 +47,114 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chọn Ghế', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.black),
-        elevation: 1,
-      ),
-      body: Column(
-        children: [
-          // Screen shape
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 20, horizontal: 40),
-            height: 30,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(50),
-                bottomRight: Radius.circular(50),
-              ),
-            ),
-            child: const Center(
-              child: Text(
-                'MÀN HÌNH',
-                style: TextStyle(letterSpacing: 4, fontWeight: FontWeight.bold, color: Colors.black54),
-              ),
-            ),
+    return Consumer<BookingViewModel>(
+      builder: (context, bookingVM, child) {
+        final movie = bookingVM.selectedMovie;
+        
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Chọn Ghế', style: TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
+            iconTheme: const IconThemeData(color: Colors.black),
+            elevation: 1,
           ),
-          
-          Expanded(
-            child: InteractiveViewer(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: cols,
-                  ),
-                  itemCount: rows * cols,
-                  itemBuilder: (context, index) {
-                    int r = index ~/ cols;
-                    int c = index % cols;
-                    return _buildSeat(r, c);
-                  },
-                ),
-              ),
-            ),
-          ),
-          
-          // Legend
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildLegendItem(Colors.grey[400]!, 'Thường'),
-                _buildLegendItem(Colors.pink[200]!, 'VIP'),
-                _buildLegendItem(Colors.red[900]!, 'Couple'),
-                _buildLegendItem(const Color(0xFFE51937), 'Đang chọn'),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: BottomAppBar(
-        color: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          body: Column(
             children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('DUNE: HÀNH TINH CÁT 2', style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text(
-                    selectedSeats.isNotEmpty 
-                        ? 'Ghế: ${selectedSeats.join(', ')}' 
-                        : 'Chưa chọn ghế',
-                    style: TextStyle(color: selectedSeats.isNotEmpty ? const Color(0xFFE51937) : Colors.grey),
+              // Screen shape
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 20, horizontal: 40),
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(50),
+                    bottomRight: Radius.circular(50),
                   ),
-                ],
-              ),
-              ElevatedButton(
-                onPressed: selectedSeats.isEmpty ? null : () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const PaymentScreen()),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE51937),
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
                 ),
-                child: const Text('TIẾP TỤC', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-              )
+                child: const Center(
+                  child: Text(
+                    'MÀN HÌNH',
+                    style: TextStyle(letterSpacing: 4, fontWeight: FontWeight.bold, color: Colors.black54),
+                  ),
+                ),
+              ),
+              
+              Expanded(
+                child: InteractiveViewer(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: cols,
+                      ),
+                      itemCount: rows * cols,
+                      itemBuilder: (context, index) {
+                        int r = index ~/ cols;
+                        int c = index % cols;
+                        return _buildSeat(context, bookingVM, r, c);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Legend
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: Colors.white,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildLegendItem(Colors.grey[400]!, 'Thường'),
+                    _buildLegendItem(Colors.pink[200]!, 'VIP'),
+                    _buildLegendItem(Colors.red[900]!, 'Couple'),
+                    _buildLegendItem(const Color(0xFFE51937), 'Đang chọn'),
+                  ],
+                ),
+              ),
             ],
           ),
-        ),
-      ),
+          bottomNavigationBar: BottomAppBar(
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(movie?.title ?? 'Chưa chọn phim', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(
+                        bookingVM.selectedSeats.isNotEmpty 
+                            ? 'Ghế: ${bookingVM.selectedSeats.join(', ')}' 
+                            : 'Chưa chọn ghế',
+                        style: TextStyle(color: bookingVM.selectedSeats.isNotEmpty ? const Color(0xFFE51937) : Colors.grey),
+                      ),
+                    ],
+                  ),
+                  ElevatedButton(
+                    onPressed: bookingVM.selectedSeats.isEmpty ? null : () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const PaymentScreen()),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE51937),
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                    ),
+                    child: const Text('TIẾP TỤC', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  )
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

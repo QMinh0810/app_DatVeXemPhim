@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../viewmodels/auth_viewmodel.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
 
@@ -14,13 +16,26 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
-  void _login() {
-    // Navigate home, discarding all previous routes
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-      (route) => false,
-    );
+  void _login() async {
+    final authVM = context.read<AuthViewModel>();
+    await authVM.login(_usernameController.text, _passwordController.text);
+    
+    if (!mounted) return;
+    
+    if (authVM.currentUser != null) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false,
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(authVM.errorMessage ?? 'Đăng nhập thất bại'), 
+          backgroundColor: Colors.red
+        ),
+      );
+    }
   }
 
   @override
@@ -99,14 +114,20 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
 
               // Login Button
-              ElevatedButton(
-                onPressed: _login,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE51937),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('ĐĂNG NHẬP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+              Consumer<AuthViewModel>(
+                builder: (context, authVM, child) {
+                  return ElevatedButton(
+                    onPressed: authVM.isLoading ? null : _login,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE51937),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: authVM.isLoading 
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('ĐĂNG NHẬP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                  );
+                }
               ),
               const SizedBox(height: 24),
 

@@ -1,111 +1,175 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import '../viewmodels/booking_viewmodel.dart';
+import 'home_screen.dart';
 
-class PaymentScreen extends StatefulWidget {
+class PaymentScreen extends StatelessWidget {
   const PaymentScreen({super.key});
 
   @override
-  State<PaymentScreen> createState() => _PaymentScreenState();
-}
-
-class _PaymentScreenState extends State<PaymentScreen> {
-  String _selectedMethod = 'VNPay';
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Thanh Toán', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        iconTheme: const IconThemeData(color: Colors.black),
-        elevation: 1,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('THÔNG TIN GIAO DỊCH', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(color: Colors.grey.withOpacity(0.2), spreadRadius: 1, blurRadius: 4, offset: const Offset(0, 2))
-                ]
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: 'VNĐ');
+
+    return Consumer<BookingViewModel>(
+      builder: (context, bookingVM, child) {
+        final movie = bookingVM.selectedMovie;
+        final seats = bookingVM.selectedSeats;
+
+        if (movie == null || seats.isEmpty) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Thanh Toán')),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Phim: DUNE: HÀNH TINH CÁT 2', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 8),
-                  Text('Rạp: Nhóm 7 Cinema Sư Vạn Hạnh'),
-                  Text('Suất chiếu: 18:00 - 10/04/2024'),
-                  Text('Phòng: PR01 - Ghế: F3, F4 (VIP)'),
-                  Divider(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('TỔNG CỘNG:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text('200,000 VNĐ', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE51937), fontSize: 18)),
-                    ],
-                  )
+                  const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  Text(
+                    movie == null ? 'Chưa chọn phim' : 'Chưa chọn ghế',
+                    style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Quay lại'),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            const Text('PHƯƠNG THỨC THANH TOÁN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
-            _buildPaymentMethod('VNPay', Icons.account_balance_wallet, 'Ví điện tử VNPay'),
-            _buildPaymentMethod('MoMo', Icons.payment, 'Ví điện tử MoMo'),
-          ],
-        ),
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        color: Colors.white,
-        child: ElevatedButton(
-          onPressed: () {
-            // Confirm Checkout logic
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Thanh toán thành công!'), backgroundColor: Colors.green),
-            );
-            Navigator.popUntil(context, (route) => route.isFirst);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFE51937),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Thanh Toán', style: TextStyle(color: Colors.black)),
+            backgroundColor: Colors.white,
+            iconTheme: const IconThemeData(color: Colors.black),
+            elevation: 1,
           ),
-          child: const Text('XÁC NHẬN THANH TOÁN', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
-        ),
-      ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('THÔNG TIN GIAO DỊCH', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(color: Colors.grey.withOpacity(0.2), spreadRadius: 1, blurRadius: 4, offset: const Offset(0, 2))
+                    ]
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Phim: ${movie.title}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text('Rạp: ${bookingVM.selectedTheaterName ?? "Chưa rõ"}'),
+                      Text('Phòng: ${bookingVM.selectedRoomName ?? "Chưa rõ"}'),
+                      Text('Suất chiếu: ${bookingVM.selectedTimeDisplay ?? "--:--"} - ${bookingVM.selectedDateDisplay ?? "--/--/----"}'),
+                      Text('Ghế: ${seats.join(", ")}'),
+                      const Divider(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('TỔNG CỘNG:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text(currencyFormat.format(bookingVM.totalPrice), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE51937), fontSize: 18)),
+                        ],
+                      )
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text('PHƯƠNG THỨC THANH TOÁN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 8),
+                _buildPaymentMethod(bookingVM, 'momo', Icons.account_balance_wallet, 'Ví điện tử MoMo'),
+                _buildPaymentMethod(bookingVM, 'vnpay', Icons.payment, 'Ví điện tử VNPay'),
+              ],
+            ),
+          ),
+          bottomNavigationBar: Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.white,
+            child: ElevatedButton(
+              onPressed: bookingVM.isLoading ? null : () async {
+                final success = await bookingVM.submitBooking();
+                if (success && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Đặt vé thành công! Mã đơn: ${bookingVM.bookingResult}'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  bookingVM.resetBooking();
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HomeScreen()),
+                    (route) => false,
+                  );
+                } else if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(bookingVM.errorMessage ?? 'Đặt vé thất bại'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE51937),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: bookingVM.isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('XÁC NHẬN THANH TOÁN', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildPaymentMethod(String value, IconData icon, String title) {
-    bool isSelected = _selectedMethod == value;
+  Widget _buildPaymentMethod(BookingViewModel bookingVM, String value, IconData icon, String title) {
+    bool isSelected = bookingVM.paymentMethod == value;
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedMethod = value;
-        });
-      },
+      onTap: () => bookingVM.setPaymentMethod(value),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          border: Border.all(color: isSelected ? const Color(0xFFE51937) : Colors.grey[300]!, width: isSelected ? 2 : 1),
+          color: isSelected ? const Color(0xFFE51937).withOpacity(0.06) : Colors.white,
+          border: Border.all(
+            color: isSelected ? const Color(0xFFE51937) : Colors.grey[300]!,
+            width: isSelected ? 2.5 : 1,
+          ),
           borderRadius: BorderRadius.circular(8),
+          boxShadow: isSelected
+              ? [BoxShadow(color: const Color(0xFFE51937).withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 2))]
+              : [],
         ),
         child: Row(
           children: [
-            Icon(icon, color: isSelected ? const Color(0xFFE51937) : Colors.grey),
+            Icon(icon, color: isSelected ? const Color(0xFFE51937) : Colors.grey, size: 28),
             const SizedBox(width: 16),
-            Text(title, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-            const Spacer(),
-            if (isSelected) const Icon(Icons.check_circle, color: Color(0xFFE51937))
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 15)),
+                  if (isSelected)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Text('Đang chọn', style: TextStyle(color: Color(0xFFE51937), fontSize: 12, fontWeight: FontWeight.w500)),
+                    ),
+                ],
+              ),
+            ),
+            if (isSelected) const Icon(Icons.check_circle, color: Color(0xFFE51937), size: 24)
           ],
         ),
       ),
