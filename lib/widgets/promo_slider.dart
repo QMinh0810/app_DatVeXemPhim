@@ -22,7 +22,7 @@ class _PromoSliderState extends State<PromoSlider> {
   @override
   void initState() {
     super.initState();
-    // _startTimer(); // Tạm tắt tự động cuộn để test máy ảo
+    _startTimer(); 
   }
 
   void _startTimer() {
@@ -51,7 +51,7 @@ class _PromoSliderState extends State<PromoSlider> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 180,
+      height: 220, // Tăng chiều cao lên 220 cho giống với tỷ lệ banner banner ngang
       child: Stack(
         alignment: Alignment.bottomCenter,
         children: [
@@ -66,18 +66,12 @@ class _PromoSliderState extends State<PromoSlider> {
             },
             itemCount: promoImages.length,
             itemBuilder: (context, index) {
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    promoImages[index],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: Colors.grey[300],
-                      child: const Center(child: Icon(Icons.image, size: 40)),
-                    ),
-                  ),
+              return Image.network(
+                promoImages[index],
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Colors.grey[300],
+                  child: const Center(child: Icon(Icons.image, size: 40)),
                 ),
               );
             },

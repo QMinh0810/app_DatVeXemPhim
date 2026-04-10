@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../screens/seat_selection_screen.dart';
+import '../screens/movie_detail_screen.dart';
 
 class MovieCard extends StatelessWidget {
   final String title;
@@ -24,21 +24,35 @@ class MovieCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              imageUrl,
-              height: 240,
-              width: 160,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  height: 240,
-                  width: 160,
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.image, color: Colors.grey),
-                );
-              },
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MovieDetailScreen(
+                    title: title,
+                    rating: rating,
+                    imageUrl: imageUrl,
+                  ),
+                ),
+              );
+            },
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                imageUrl,
+                height: 240,
+                width: 160,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    height: 240,
+                    width: 160,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.image, color: Colors.grey),
+                  );
+                },
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -89,7 +103,11 @@ class MovieCard extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const SeatSelectionScreen(),
+                    builder: (context) => MovieDetailScreen(
+                      title: title,
+                      rating: rating,
+                      imageUrl: imageUrl,
+                    ),
                   ),
                 );
               },

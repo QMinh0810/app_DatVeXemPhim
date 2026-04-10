@@ -9,26 +9,31 @@ class SeatSelectionScreen extends StatefulWidget {
 }
 
 class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
-  final int rows = 8;
-  final int cols = 8;
+  final int rows = 12; // Thay đổi số lượng ghế
+  final int cols = 14; 
   final List<String> selectedSeats = [];
 
-  Widget _buildSeat(int row, int col) {
-    String seatName = '${String.fromCharCode(65 + row)}${col + 1}';
+  Widget _buildSeat(int row, int col, [bool isCoupleRow = false]) {
+    String seatName = isCoupleRow 
+        ? 'SW${col + 1}' // Tên ghế Sweetbox (Couple)
+        : '${String.fromCharCode(65 + row)}${col + 1}';
     bool isSelected = selectedSeats.contains(seatName);
 
     // Mock booked seats
-    bool isBooked = (row == 3 && (col == 3 || col == 4));
+    bool isBooked = (row == 5 && (col == 6 || col == 7)) || (row == 8 && (col == 4 || col == 5));
     // Mock VIP seats (middle rows)
-    bool isVip = (row >= 4 && row <= 6);
-    // Mock Sweetbox / Couple (last row)
-    bool isCouple = (row == 7);
+    bool isVip = (row >= 6 && row <= 9);
+    // Mock Sweetbox / Couple
+    bool isCouple = isCoupleRow;
 
     Color seatColor = Colors.grey[400]!;
     if (isBooked) seatColor = Colors.black26;
     else if (isSelected) seatColor = const Color(0xFFE51937);
     else if (isVip) seatColor = Colors.pink[200]!;
     else if (isCouple) seatColor = Colors.red[900]!;
+
+    // Tính toán kích thước ghế để ghế couple vừa bằng 2 ghế thường gộp lại
+    double seatWidth = isCouple ? 70.0 : 32.0; 
 
     return GestureDetector(
       onTap: isBooked ? null : () {
@@ -41,16 +46,21 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         });
       },
       child: Container(
-        margin: const EdgeInsets.all(4),
+        width: seatWidth,
+        height: 32,
+        margin: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: seatColor,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(6),
           border: isSelected ? Border.all(color: Colors.red, width: 2) : null,
         ),
         alignment: Alignment.center,
         child: isBooked 
-            ? const Icon(Icons.close, size: 16, color: Colors.white)
-            : Text(seatName, style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
+            ? const Icon(Icons.close, size: 14, color: Colors.white)
+            : Text(
+                seatName, 
+                style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)
+              ),
       ),
     );
   }
@@ -87,19 +97,36 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
           
           Expanded(
             child: InteractiveViewer(
+              constrained: false, // Giúp các ghế không bị co rút cắt xén khi quá nhỏ
+              boundaryMargin: const EdgeInsets.all(40),
+              minScale: 0.5,
+              maxScale: 3.0,
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: cols,
-                  ),
-                  itemCount: rows * cols,
-                  itemBuilder: (context, index) {
-                    int r = index ~/ cols;
-                    int c = index % cols;
-                    return _buildSeat(r, c);
-                  },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(rows, (row) {
+                    bool isCoupleRow = (row == 11);
+                    int colsInRow = isCoupleRow ? cols ~/ 2 : cols;
+                    
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(colsInRow, (col) {
+                        Widget seat = _buildSeat(row, col, isCoupleRow);
+                        
+                        // Tạo lối đi (aisle) ngang 40px ở giữa rạp
+                        if (!isCoupleRow && col == 6) {
+                          // Chia đều 7 ghế trái, 7 ghế phải
+                          return Row(mainAxisSize: MainAxisSize.min, children: [seat, const SizedBox(width: 40)]);
+                        } else if (isCoupleRow && col == 2) {
+                          // Hàng Couple (7 ghế), chia 3 ghế trái, 4 ghế phải để bảo toàn tổng chiều rộng
+                          return Row(mainAxisSize: MainAxisSize.min, children: [seat, const SizedBox(width: 40)]);
+                        }
+                        
+                        return seat;
+                      }),
+                    );
+                  }),
                 ),
               ),
             ),
