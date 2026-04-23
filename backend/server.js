@@ -8,6 +8,7 @@ const authRoutes = require('./routes/authRoutes');
 const movieRoutes = require('./routes/movieRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,6 +22,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/movies', movieRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/users', userRoutes);
 
 // API: Kiểm tra Health
 app.get('/api/health', (req, res) => {
@@ -38,7 +40,9 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
+const { startCleanupJob } = require('./utils/cleanupJob');
 // Lắng nghe cổng Mạng
 app.listen(PORT, () => {
   console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
+  startCleanupJob(); // Kích hoạt dọn dẹp ghế hết hạn
 });

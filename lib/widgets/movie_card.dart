@@ -37,6 +37,7 @@ class MovieCard extends StatelessWidget {
               width: 160,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
+                print('Image load error: $error');
                 return Container(
                   height: 240,
                   width: 160,

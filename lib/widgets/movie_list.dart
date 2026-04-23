@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/movie_model.dart';
 import '../viewmodels/movie_viewmodel.dart';
 import 'movie_card.dart';
 
@@ -11,11 +12,11 @@ class MovieList extends StatefulWidget {
 }
 
 class _MovieListState extends State<MovieList> {
-  @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MovieViewModel>().fetchMovies();
+      context.read<MovieViewModel>().fetchHotMovies();
     });
   }
 
@@ -33,7 +34,7 @@ class _MovieListState extends State<MovieList> {
             indicatorColor: Color(0xFFE51937),
             tabs: [
               Tab(text: 'Đang chiếu'),
-              Tab(text: 'Đặc biệt'),
+              Tab(text: 'Phim Hot'),
               Tab(text: 'Sắp chiếu'),
             ],
           ),
@@ -42,9 +43,9 @@ class _MovieListState extends State<MovieList> {
             height: 380, // Height for movie card including button
             child: TabBarView(
               children: [
-                _buildMovieCarousel(context, true),
-                const Center(child: Text("Không có dữ liệu phim đặc biệt")),
-                _buildMovieCarousel(context, false),
+                _buildMovieCarousel(context, 'showing'),
+                _buildMovieCarousel(context, 'hot'),
+                _buildMovieCarousel(context, 'coming_soon'),
               ],
             ),
           ),
@@ -53,14 +54,21 @@ class _MovieListState extends State<MovieList> {
     );
   }
 
-  Widget _buildMovieCarousel(BuildContext context, bool isShowing) {
+  Widget _buildMovieCarousel(BuildContext context, String listType) {
     return Consumer<MovieViewModel>(
       builder: (context, movieVM, child) {
         if (movieVM.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final movies = isShowing ? movieVM.showingMovies : movieVM.comingSoonMovies;
+        List<MovieModel> movies = [];
+        if (listType == 'showing') {
+          movies = movieVM.showingMovies;
+        } else if (listType == 'hot') {
+          movies = movieVM.hotMovies;
+        } else if (listType == 'coming_soon') {
+          movies = movieVM.comingSoonMovies;
+        }
 
         if (movies.isEmpty) {
           return const Center(child: Text("Không có phim nào"));

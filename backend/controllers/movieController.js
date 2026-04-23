@@ -24,8 +24,17 @@ exports.getMovies = async (req, res) => {
 // Lấy danh sách phim đang HOT (Giả lập việc xếp tự động theo lượt xem hoặc ngẫu nhiên)
 exports.getHotMovies = async (req, res) => {
     try {
-        // Mocking: Lấy ngẫu nhiên vài bộ phim đang chiếu làm phim HOT
-        const result = await db.query("SELECT * FROM phim WHERE trangthai = 'showing' ORDER BY RANDOM() LIMIT 5");
+        // Thay vì random, ta tìm các Phim có Hashtag chứa chữ "phimhot" đang được chiếu
+        const queryHotMovies = `
+            SELECT p.* 
+            FROM phim p
+            JOIN phim_hashtag ph ON p.maphim = ph.maphim
+            JOIN hashtag h ON ph.mahashtag = h.mahashtag
+            WHERE REPLACE(LOWER(h.tenhashtag), ' ', '') ILIKE $1 
+            AND p.trangthai = 'showing'
+            LIMIT 5
+        `;
+        const result = await db.query(queryHotMovies, ['%phimhot%']);
         res.json({ status: 'success', data: result.rows });
     } catch (e) {
         console.error(e);

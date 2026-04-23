@@ -4,6 +4,7 @@ import 'screens/login_screen.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/movie_viewmodel.dart';
 import 'viewmodels/booking_viewmodel.dart';
+import 'screens/account_info_screen.dart';
 
 void main() {
   runApp(
@@ -41,7 +42,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const LoginScreen(),
+      home: const AccountInfoScreen(),
     );
   }
 }

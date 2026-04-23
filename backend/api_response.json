@@ -1,0 +1,44 @@
+{
+  "status": "success",
+  "data": [
+    {
+      "maphim": "P003",
+      "tenphim": "KUNG FU PANDA 4",
+      "ngayramat": "2024-03-07T17:00:00.000Z",
+      "mota": "Gấu trúc Po trở lại.",
+      "thoiluong": 94,
+      "gioihantuoi": 0,
+      "poster_url": "https://image.tmdb.org/t/p/original/kDp1vYh9oqGwsLEz9o3pUzlP1iP.jpg",
+      "trailer_url": "https://youtube.com",
+      "trangthai": "coming_soon",
+      "duoctaoboi": "Admin",
+      "duoctaongay": "2026-04-03T12:03:12.738Z"
+    },
+    {
+      "maphim": "P002",
+      "tenphim": "MAI",
+      "ngayramat": "2024-02-09T17:00:00.000Z",
+      "mota": "Cú sốc phòng vé phim Việt Tết 2024.",
+      "thoiluong": 131,
+      "gioihantuoi": 18,
+      "poster_url": "https://m.media-amazon.com/images/M/MV5BMjA0NzYwNTEtN2Y0My00ZGNmLTljYTctYjBhMDZlNDZlYjM0XkEyXkFqcGdeQXVyMTI1NDEyNTM5._V1_.jpg",
+      "trailer_url": "https://youtube.com",
+      "trangthai": "showing",
+      "duoctaoboi": "Admin",
+      "duoctaongay": "2026-04-03T12:03:12.738Z"
+    },
+    {
+      "maphim": "P001",
+      "tenphim": "DUNE: HÀNH TINH CÁT 2",
+      "ngayramat": "2024-02-29T17:00:00.000Z",
+      "mota": "Phần 2 của siêu phẩm Dune.",
+      "thoiluong": 166,
+      "gioihantuoi": 16,
+      "poster_url": "https://image.tmdb.org/t/p/original/8uS6bYpY99asZAsvK7697A6YJ5r.jpg",
+      "trailer_url": "https://youtube.com",
+      "trangthai": "showing",
+      "duoctaoboi": "Admin",
+      "duoctaongay": "2026-04-03T12:03:12.738Z"
+    }
+  ]
+}

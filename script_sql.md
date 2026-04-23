@@ -126,10 +126,10 @@ go
 Create table [ThongTinThanhToan] (
 	[maThanhToan] Varchar(10) NOT NULL,
 	[phuongThucThanhToan] Varchar(10) NOT NULL Check (phuongThucThanhToan IN (N'momo', N'vnpay') ),
-	[paymentGatewayTransactionId] Varchar(100) NOT NULL,
+	[paymentGatewayTransactionId] Varchar(100) NULL,
 	[soTienThanhToan] Integer NOT NULL,
 	[thoiDiemThanhToan] Datetime Default GETDATE() NOT NULL,
-	[trangThai] Varchar(50) NOT NULL Check (trangThai IN (N'success', N'failed') ),
+	[trangThai] Varchar(50) NOT NULL Check (trangThai IN (N'success', N'failed', N'pending') ),
 	[maDonDatVe] Varchar(10) NOT NULL,
 Primary Key  ([maThanhToan])
 ) 

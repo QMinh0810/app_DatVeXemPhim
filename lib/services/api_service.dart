@@ -171,4 +171,55 @@ class ApiService {
     );
     return jsonDecode(res.body);
   }
+
+  // ==================== USER PROFILE & HISTORY ====================
+
+  /// Lấy thông tin cá nhân
+  static Future<Map<String, dynamic>> fetchProfile() async {
+    final res = await http.get(Uri.parse('$baseUrl/users/profile'), headers: _headers);
+    return jsonDecode(res.body);
+  }
+
+  /// Cập nhật Profile
+  static Future<Map<String, dynamic>> updateProfile({
+    String? hoTen,
+    String? ngaySinh,
+    int? gioiTinh,
+    String? anhDaiDien,
+  }) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/users/profile'),
+      headers: _headers,
+      body: jsonEncode({
+        if (hoTen != null) 'hoTen': hoTen,
+        if (ngaySinh != null) 'ngaySinh': ngaySinh,
+        if (gioiTinh != null) 'gioiTinh': gioiTinh,
+        if (anhDaiDien != null) 'anhDaiDien': anhDaiDien,
+      }),
+    );
+    return jsonDecode(res.body);
+  }
+
+  /// Xem lịch sử đặt vé
+  static Future<List<dynamic>> fetchBookingHistory() async {
+    final res = await http.get(Uri.parse('$baseUrl/users/history'), headers: _headers);
+    final body = jsonDecode(res.body);
+    return body['data'] ?? [];
+  }
+
+  // ==================== GOOGLE LOGIN ====================
+
+  /// Đăng nhập bằng Google ID Token
+  static Future<Map<String, dynamic>> googleLogin(String idToken) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/auth/google-login'),
+      headers: _headers,
+      body: jsonEncode({'idToken': idToken}),
+    );
+    final responseData = jsonDecode(res.body);
+    if (responseData['status'] == 'success') {
+      _token = responseData['token'];
+    }
+    return responseData;
+  }
 }
