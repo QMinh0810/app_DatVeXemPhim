@@ -5,6 +5,7 @@ import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/movie_viewmodel.dart';
 import 'viewmodels/booking_viewmodel.dart';
 import 'screens/account_info_screen.dart';
+import 'screens/home_screen.dart';
 
 void main() {
   runApp(
@@ -42,7 +43,52 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const AccountInfoScreen(),
+      home: const AuthWrapper(),
     );
+  }
+}
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _isInitializing = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initAuth();
+  }
+
+  Future<void> _initAuth() async {
+    final authVM = context.read<AuthViewModel>();
+    await authVM.tryAutoLogin();
+    if (mounted) {
+      setState(() {
+        _isInitializing = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isInitializing) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFE51937)),
+        ),
+      );
+    }
+
+    final authVM = context.watch<AuthViewModel>();
+    if (authVM.currentUser != null) {
+      return const HomeScreen();
+    } else {
+      return const LoginScreen();
+    }
   }
 }

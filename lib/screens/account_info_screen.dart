@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../viewmodels/auth_viewmodel.dart';
+import '../services/api_service.dart';
 
 class AccountInfoScreen extends StatefulWidget {
   const AccountInfoScreen({super.key});
@@ -8,12 +11,32 @@ class AccountInfoScreen extends StatefulWidget {
 }
 
 class _AccountInfoScreenState extends State<AccountInfoScreen> {
-  final TextEditingController _nameController = TextEditingController(text: 'Nguyễn Văn A');
-  final TextEditingController _phoneController = TextEditingController(text: '0901234567');
-  final TextEditingController _emailController = TextEditingController(text: 'nguyenvana@gmail.com');
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   
+  String _maTaiKhoan = '';
   int _gender = 1; // 1: Nam, 0: Nữ
-  DateTime _selectedDate = DateTime(1995, 5, 12);
+  DateTime _selectedDate = DateTime(2000, 1, 1);
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = context.read<AuthViewModel>().currentUser;
+      if (user != null) {
+        setState(() {
+          _maTaiKhoan = user.id;
+          _nameController.text = user.fullName;
+          _phoneController.text = user.phone;
+          _emailController.text = user.email;
+          _gender = user.gender;
+          _selectedDate = user.dob;
+        });
+      }
+    });
+  }
 
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
@@ -49,10 +72,18 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
               child: Stack(
                 alignment: Alignment.bottomRight,
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 50,
-                    backgroundColor: Color(0xFFE51937),
-                    child: Text('A', style: TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.bold)),
+                    backgroundColor: const Color(0xFFE51937),
+                    backgroundImage: context.watch<AuthViewModel>().currentUser?.avatarUrl != null 
+                        ? NetworkImage(context.watch<AuthViewModel>().currentUser!.avatarUrl!) 
+                        : null,
+                    child: context.watch<AuthViewModel>().currentUser?.avatarUrl == null 
+                        ? Text(
+                            _nameController.text.isNotEmpty ? _nameController.text[0].toUpperCase() : '?', 
+                            style: const TextStyle(fontSize: 40, color: Colors.white, fontWeight: FontWeight.bold)
+                          ) 
+                        : null,
                   ),
                   Container(
                     padding: const EdgeInsets.all(4),
@@ -69,7 +100,8 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
 
             _buildTitle('MÃ TÀI KHOẢN'),
             TextFormField(
-              initialValue: 'TK001',
+              key: Key(_maTaiKhoan), // Force rebuild when _maTaiKhoan changes
+              initialValue: _maTaiKhoan.isEmpty ? 'Chưa rõ' : _maTaiKhoan,
               readOnly: true,
               style: const TextStyle(color: Colors.grey),
               decoration: _inputDecoration().copyWith(fillColor: Colors.grey[100]),
@@ -122,18 +154,55 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             const SizedBox(height: 32),
 
             ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cập nhật thông tin thành công!'), backgroundColor: Colors.green),
-                );
-                Navigator.pop(context);
+              onPressed: _isLoading ? null : () async {
+                setState(() {
+                  _isLoading = true;
+                });
+                try {
+                  final res = await ApiService.updateProfile(
+                    hoTen: _nameController.text,
+                    ngaySinh: "${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}",
+                    gioiTinh: _gender,
+                  );
+                  if (res['status'] == 'success') {
+                    if (context.mounted) {
+                      await context.read<AuthViewModel>().tryAutoLogin(); // Reload info
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Cập nhật thông tin thành công!'), backgroundColor: Colors.green),
+                        );
+                        Navigator.pop(context);
+                      }
+                    }
+                  } else {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(res['message'] ?? 'Lỗi cập nhật'), backgroundColor: Colors.red),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Lỗi kết nối'), backgroundColor: Colors.red),
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setState(() {
+                      _isLoading = false;
+                    });
+                  }
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE51937),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('CẬP NHẬT THÔNG TIN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+              child: _isLoading 
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white))
+                : const Text('CẬP NHẬT THÔNG TIN', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
             ),
             const SizedBox(height: 40),
           ],

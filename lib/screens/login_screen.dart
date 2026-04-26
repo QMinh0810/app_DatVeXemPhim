@@ -38,6 +38,30 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _loginWithGoogle() async {
+    final authVM = context.read<AuthViewModel>();
+    await authVM.loginWithGoogle();
+    
+    if (!mounted) return;
+    
+    if (authVM.currentUser != null) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false,
+      );
+    } else {
+      if (authVM.errorMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authVM.errorMessage!), 
+            backgroundColor: Colors.red
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -129,6 +153,27 @@ class _LoginScreenState extends State<LoginScreen> {
                   );
                 }
               ),
+              const SizedBox(height: 16),
+
+              // Google Login Button
+              Consumer<AuthViewModel>(
+                builder: (context, authVM, child) {
+                  return OutlinedButton.icon(
+                    onPressed: authVM.isLoading ? null : _loginWithGoogle,
+                    icon: Image.network(
+                      'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg',
+                      height: 24,
+                    ),
+                    label: const Text('Đăng nhập với Google', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: const BorderSide(color: Colors.grey),
+                    ),
+                  );
+                }
+              ),
+
               const SizedBox(height: 24),
 
               // Register

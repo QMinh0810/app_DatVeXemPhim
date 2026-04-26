@@ -11,7 +11,7 @@ class MovieListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<MovieViewModel>(
       builder: (context, movieVM, child) {
-        final allMovies = movieVM.showingMovies;
+        final allMovies = movieVM.allMovies;
 
         return Scaffold(
           appBar: AppBar(

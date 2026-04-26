@@ -3,6 +3,7 @@ import '../models/movie_model.dart';
 import '../services/api_service.dart';
 
 class MovieViewModel extends ChangeNotifier {
+  List<MovieModel> _allMovies = [];
   List<MovieModel> _showingMovies = [];
   List<MovieModel> _comingSoonMovies = [];
   List<MovieModel> _hotMovies = [];
@@ -10,6 +11,7 @@ class MovieViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
+  List<MovieModel> get allMovies => _allMovies;
   List<MovieModel> get showingMovies => _showingMovies;
   List<MovieModel> get comingSoonMovies => _comingSoonMovies;
   List<MovieModel> get hotMovies => _hotMovies;
@@ -24,17 +26,22 @@ class MovieViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Gọi song song 2 API để tăng tốc
+      // Gọi song song 3 API để tăng tốc
       final results = await Future.wait([
-        ApiService.fetchMovies(status: 'showing'),
+        ApiService.fetchMovies(),
+        ApiService.fetchMovies(status: 'now_showing'),
         ApiService.fetchMovies(status: 'coming_soon'),
       ]);
 
-      _showingMovies = results[0]
+      _allMovies = results[0]
           .map((json) => MovieModel.fromJson(json as Map<String, dynamic>))
           .toList();
 
-      _comingSoonMovies = results[1]
+      _showingMovies = results[1]
+          .map((json) => MovieModel.fromJson(json as Map<String, dynamic>))
+          .toList();
+
+      _comingSoonMovies = results[2]
           .map((json) => MovieModel.fromJson(json as Map<String, dynamic>))
           .toList();
     } catch (e) {

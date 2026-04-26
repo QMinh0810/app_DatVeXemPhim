@@ -10,6 +10,6 @@ router.get('/showtimes/:showtimeId/seats', bookingController.getTheaterRoomsAndS
 
 // Tuyến xử lý giao dịch đặt vé (Đã bảo vệ bởi Token)
 router.post('/book', verifyToken, bookingController.createBooking); 
-router.post('/confirm-payment', verifyToken, bookingController.confirmPayment);
+// Đã bỏ: router.post('/confirm-payment') - Việc xác nhận thanh toán giờ do Admin xử lý qua PUT /api/admin/payments/:id/status
 
 module.exports = router;

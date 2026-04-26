@@ -31,7 +31,7 @@ exports.getHotMovies = async (req, res) => {
             JOIN phim_hashtag ph ON p.maphim = ph.maphim
             JOIN hashtag h ON ph.mahashtag = h.mahashtag
             WHERE REPLACE(LOWER(h.tenhashtag), ' ', '') ILIKE $1 
-            AND p.trangthai = 'showing'
+            AND p.trangthai = 'now_showing'
             LIMIT 5
         `;
         const result = await db.query(queryHotMovies, ['%phimhot%']);

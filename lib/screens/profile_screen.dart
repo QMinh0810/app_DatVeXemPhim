@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../viewmodels/auth_viewmodel.dart';
 import 'login_screen.dart';
 import 'account_info_screen.dart';
 import 'transaction_history_screen.dart';
@@ -9,6 +11,11 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authVM = context.watch<AuthViewModel>();
+    final user = authVM.currentUser;
+    final name = user?.fullName ?? 'Chưa đăng nhập';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -25,16 +32,17 @@ class ProfileScreen extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               child: Row(
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 40,
-                    backgroundColor: Color(0xFFE51937),
-                    child: Text('A', style: TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold)),
+                    backgroundColor: const Color(0xFFE51937),
+                    backgroundImage: user?.avatarUrl != null ? NetworkImage(user!.avatarUrl!) : null,
+                    child: user?.avatarUrl == null ? Text(initial, style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold)) : null,
                   ),
                   const SizedBox(width: 16),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Nguyễn Văn A', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text(name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -42,7 +50,7 @@ class ProfileScreen extends StatelessWidget {
                           color: Colors.yellow[700],
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('Thành viên thân thiết', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
+                        child: const Text('Thành viên', style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   )
@@ -97,12 +105,15 @@ class ProfileScreen extends StatelessWidget {
               child: ListTile(
                 leading: const Icon(Icons.exit_to_app, color: Color(0xFFE51937)),
                 title: const Text('Đăng xuất', style: TextStyle(color: Color(0xFFE51937), fontWeight: FontWeight.bold)),
-                onTap: () {
-                  Navigator.pushAndRemoveUntil(
-                    context, 
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                    (route) => false
-                  );
+                onTap: () async {
+                  await context.read<AuthViewModel>().logout();
+                  if (context.mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context, 
+                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                      (route) => false
+                    );
+                  }
                 },
               ),
             ),

@@ -112,7 +112,7 @@ exports.createBooking = async (req, res) => {
     const client = await db.connect();
 
     try {
-        const { showtimeId, seatIds, paymentMethod } = req.body;
+        const { showtimeId, seatIds, paymentMethod, concessions } = req.body;
         // Lấy userId từ Token (Bắt buộc)
         const userId = req.user.id; 
 
@@ -145,10 +145,46 @@ exports.createBooking = async (req, res) => {
 
         const seatRes = await client.query('SELECT maghe, hesogiaghe FROM ghengoi WHERE maghe = ANY($1::varchar[])', [seatIds]);
         
-        let totalPrice = 0;
-        seatRes.rows.forEach(seat => {
-            totalPrice += (basePrice * seat.hesogiaghe);
-        });
+        if (seatRes.rows.length !== seatIds.length) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ status: 'error', message: 'Một hoặc nhiều ghế không hợp lệ.' });
+        }
+
+        let ticketPriceTotal = 0;
+        for (let sId of seatIds) {
+            let seat = seatRes.rows.find(s => String(s.maghe).trim() === String(sId).trim());
+            if (!seat) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ status: 'error', message: `Không tìm thấy thông tin giá cho ghế: ${sId}` });
+            }
+            ticketPriceTotal += (basePrice * seat.hesogiaghe);
+        }
+
+        // 2.5 Tính tiền bắp nước (concessions)
+        let concessionPrice = 0;
+        let concessionDetails = [];
+
+        if (concessions && concessions.length > 0) {
+            for (let c of concessions) {
+                if (c.itemId) {
+                    const itemRes = await client.query('SELECT price FROM items WHERE item_id = $1', [c.itemId]);
+                    if (itemRes.rows.length > 0) {
+                        const price = itemRes.rows[0].price;
+                        concessionPrice += price * c.quantity;
+                        concessionDetails.push({ ...c, price });
+                    }
+                } else if (c.comboId) {
+                    const comboRes = await client.query('SELECT price FROM combos WHERE combo_id = $1', [c.comboId]);
+                    if (comboRes.rows.length > 0) {
+                        const price = comboRes.rows[0].price;
+                        concessionPrice += price * c.quantity;
+                        concessionDetails.push({ ...c, price });
+                    }
+                }
+            }
+        }
+
+        let totalPrice = ticketPriceTotal + concessionPrice;
 
         // 3. Sinh mã Đơn Hàng
         const maDonDatVe = 'DON' + Date.now().toString().slice(-6);
@@ -160,18 +196,33 @@ exports.createBooking = async (req, res) => {
         `;
         await client.query(insertDonQuery, [maDonDatVe, totalPrice, userId]);
 
+        // 4.5 Tạo thông tin bắp nước
+        if (concessionDetails.length > 0) {
+            for (let c of concessionDetails) {
+                const thanhTien = c.price * c.quantity;
+                await client.query(`
+                    INSERT INTO order_concessions (madondatve, item_id, combo_id, so_luong, gia_luc_mua, thanh_tien)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                `, [maDonDatVe, c.itemId || null, c.comboId || null, c.quantity, c.price, thanhTien]);
+            }
+        }
+
         // 5. Tạo thông tin thanh toán (Trạng thái: pending)
         const maThanhToan = 'PAY' + Date.now().toString().slice(-6);
         const insertPaymentQuery = `
-            INSERT INTO thongtinthanhtoan (mathanhtoan, phuongthucthanhtoan, sotienthanhtoan, trangthai, madondatve)
-            VALUES ($1, $2, $3, 'pending', $4)
+            INSERT INTO thongtinthanhtoan (mathanhtoan, phuongthucthanhtoan, sotienthanhtoan, trangthai, madondatve, paymentgatewaytransactionid)
+            VALUES ($1, $2, $3, 'pending', $4, '')
         `;
         await client.query(insertPaymentQuery, [maThanhToan, paymentMethod || 'momo', totalPrice, maDonDatVe]);
 
         // 6. Tạo Vé Xem Phim (Trạng thái: pending, Giữ trong 10 phút)
         for (let i = 0; i < seatIds.length; i++) {
             let maVe = 'VE' + Date.now().toString().slice(-4) + i;
-            let targetSeat = seatRes.rows.find(s => s.maghe === seatIds[i]);
+            let targetSeat = seatRes.rows.find(s => String(s.maghe).trim() === String(seatIds[i]).trim());
+            if (!targetSeat) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ status: 'error', message: `Lỗi xử lý vé: Không tìm thấy ghế ${seatIds[i]}` });
+            }
             let ticketPrice = basePrice * targetSeat.hesogiaghe;
             
             // Giữ ghế trong 10 phút

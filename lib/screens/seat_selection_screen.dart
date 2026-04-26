@@ -3,8 +3,21 @@ import 'package:provider/provider.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import 'payment_screen.dart'; 
 
-class SeatSelectionScreen extends StatelessWidget {
+class SeatSelectionScreen extends StatefulWidget {
   const SeatSelectionScreen({super.key});
+
+  @override
+  State<SeatSelectionScreen> createState() => _SeatSelectionScreenState();
+}
+
+class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BookingViewModel>().fetchSeatMap();
+    });
+  }
 
   final int rows = 8;
   final int cols = 8;
@@ -13,8 +26,7 @@ class SeatSelectionScreen extends StatelessWidget {
     String seatName = '${String.fromCharCode(65 + row)}${col + 1}';
     bool isSelected = bookingVM.selectedSeats.contains(seatName);
 
-    // Mock booked seats
-    bool isBooked = (row == 3 && (col == 3 || col == 4));
+    bool isBooked = bookingVM.bookedSeats.contains(seatName);
     // Mock VIP seats (middle rows)
     bool isVip = (row >= 4 && row <= 6);
     // Mock Sweetbox / Couple (last row)
@@ -51,6 +63,18 @@ class SeatSelectionScreen extends StatelessWidget {
       builder: (context, bookingVM, child) {
         final movie = bookingVM.selectedMovie;
         
+        if (bookingVM.isLoading) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Chọn Ghế', style: TextStyle(color: Colors.black)),
+              backgroundColor: Colors.white,
+              iconTheme: const IconThemeData(color: Colors.black),
+              elevation: 1,
+            ),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
         return Scaffold(
           appBar: AppBar(
             title: const Text('Chọn Ghế', style: TextStyle(color: Colors.black)),

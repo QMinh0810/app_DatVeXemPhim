@@ -1,0 +1,292 @@
+const db = require('../../config/db');
+const ExcelJS = require('exceljs');
+
+/**
+ * Số lượt đặt vé theo phim
+ * GET /api/admin/stats/bookings-by-movie
+ */
+exports.bookingsByMovie = async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.maphim, p.tenphim, p.poster_url,
+                   COUNT(v.mavexemphim) as so_ve,
+                   COALESCE(SUM(v.giave), 0) as tong_tien
+            FROM phim p
+            LEFT JOIN lichchieu lc ON p.maphim = lc.maphim
+            LEFT JOIN vexemphim v ON lc.malichchieu = v.malichchieu
+            LEFT JOIN dondatve d ON v.madondatve = d.madondatve AND d.trangthai = 'paid'
+            GROUP BY p.maphim, p.tenphim, p.poster_url
+            ORDER BY so_ve DESC
+        `);
+
+        res.json({ status: 'success', data: result.rows });
+    } catch (e) {
+        console.error("Stats bookings-by-movie Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi thống kê theo phim' });
+    }
+};
+
+/**
+ * Số lượt đặt vé theo rạp
+ * GET /api/admin/stats/bookings-by-theater
+ */
+exports.bookingsByTheater = async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT r.marapphim, r.tenrapphim, r.diachi,
+                   COUNT(v.mavexemphim) as so_ve,
+                   COALESCE(SUM(v.giave), 0) as tong_tien
+            FROM rapphim r
+            LEFT JOIN phongrapphim pr ON r.marapphim = pr.marapphim
+            LEFT JOIN lichchieu lc ON pr.maphong = lc.maphong
+            LEFT JOIN vexemphim v ON lc.malichchieu = v.malichchieu
+            LEFT JOIN dondatve d ON v.madondatve = d.madondatve AND d.trangthai = 'paid'
+            GROUP BY r.marapphim, r.tenrapphim, r.diachi
+            ORDER BY so_ve DESC
+        `);
+
+        res.json({ status: 'success', data: result.rows });
+    } catch (e) {
+        console.error("Stats bookings-by-theater Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi thống kê theo rạp' });
+    }
+};
+
+/**
+ * Doanh thu theo từng phim (dùng số vé thay vì số đơn)
+ * GET /api/admin/stats/revenue-by-movie
+ */
+exports.revenueByMovie = async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT p.maphim, p.tenphim,
+                   COUNT(v.mavexemphim) as so_ve,
+                   COALESCE(SUM(v.giave), 0) as doanh_thu
+            FROM phim p
+            LEFT JOIN lichchieu lc ON p.maphim = lc.maphim
+            LEFT JOIN vexemphim v ON lc.malichchieu = v.malichchieu
+            LEFT JOIN dondatve d ON v.madondatve = d.madondatve AND d.trangthai = 'paid'
+            GROUP BY p.maphim, p.tenphim
+            ORDER BY doanh_thu DESC
+        `);
+
+        res.json({ status: 'success', data: result.rows });
+    } catch (e) {
+        console.error("Stats revenue-by-movie Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi thống kê doanh thu' });
+    }
+};
+
+/**
+ * Thống kê doanh thu theo ngày
+ * GET /api/admin/stats/daily-revenue?from=2024-04-01&to=2024-04-30
+ * Trả về: ngày, tiền bán vé, tiền F&B, tiền hoàn huỷ vé, doanh thu thực tế
+ */
+exports.dailyRevenueStats = async (req, res) => {
+    try {
+        const { from, to } = req.query;
+
+        if (!from || !to) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Vui lòng cung cấp tham số from và to (VD: from=2024-04-01&to=2024-04-30)'
+            });
+        }
+
+        // 1. Tiền bán vé theo ngày (chỉ tính đơn paid)
+        const ticketRevenueQuery = `
+            SELECT 
+                DATE(d.ngaydatve) as ngay,
+                COALESCE(SUM(CASE WHEN d.trangthai = 'paid' THEN d.tongtien ELSE 0 END), 0) as tien_ban_ve,
+                COALESCE(SUM(CASE WHEN d.trangthai = 'cancelled' THEN d.tongtien ELSE 0 END), 0) as tien_hoan_huy
+            FROM dondatve d
+            WHERE DATE(d.ngaydatve) BETWEEN $1 AND $2
+            GROUP BY DATE(d.ngaydatve)
+            ORDER BY ngay
+        `;
+        const ticketRes = await db.query(ticketRevenueQuery, [from, to]);
+
+        // 2. Tiền F&B theo ngày (nếu có bảng order_items hoặc tương tự)
+        // Hiện tại chưa có bảng liên kết đơn hàng với items/combos,
+        // nên tạm thời trả 0 cho tiền F&B. Khi có bảng, sẽ cập nhật query.
+        const dailyData = ticketRes.rows.map(row => ({
+            ngay: row.ngay,
+            tien_ban_ve: parseInt(row.tien_ban_ve),
+            tien_fb: 0, // TODO: Cập nhật khi có bảng đơn hàng F&B
+            tien_hoan_huy: parseInt(row.tien_hoan_huy),
+            doanh_thu_thuc_te: parseInt(row.tien_ban_ve) - parseInt(row.tien_hoan_huy)
+        }));
+
+        res.json({ status: 'success', data: dailyData });
+    } catch (e) {
+        console.error("Daily Revenue Stats Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi thống kê doanh thu theo ngày' });
+    }
+};
+
+/**
+ * Xuất báo cáo XLSX hàng tháng
+ * GET /api/admin/reports/monthly?month=2024-04
+ */
+exports.monthlyReport = async (req, res) => {
+    try {
+        const { month } = req.query; // Format: YYYY-MM
+
+        if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+            return res.status(400).json({ status: 'error', message: 'Vui lòng truyền tham số month theo định dạng YYYY-MM (VD: 2024-04)' });
+        }
+
+        const [year, mon] = month.split('-');
+
+        // 1. Lấy thông tin tổng quan
+        const summaryQuery = `
+            SELECT 
+                COUNT(DISTINCT d.madondatve) as tong_don,
+                COUNT(v.mavexemphim) as tong_ve,
+                COALESCE(SUM(CASE WHEN d.trangthai = 'paid' THEN d.tongtien ELSE 0 END), 0) as tong_doanh_thu
+            FROM dondatve d
+            LEFT JOIN vexemphim v ON d.madondatve = v.madondatve
+            WHERE EXTRACT(YEAR FROM d.ngaydatve) = $1
+              AND EXTRACT(MONTH FROM d.ngaydatve) = $2
+        `;
+        const summaryRes = await db.query(summaryQuery, [year, mon]);
+        const summary = summaryRes.rows[0];
+
+        // 2. Lấy chi tiết doanh thu theo phim
+        const detailQuery = `
+            SELECT p.tenphim,
+                   COUNT(v.mavexemphim) as so_ve,
+                   COALESCE(SUM(v.giave), 0) as doanh_thu
+            FROM dondatve d
+            JOIN vexemphim v ON d.madondatve = v.madondatve
+            JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
+            JOIN phim p ON lc.maphim = p.maphim
+            WHERE d.trangthai = 'paid'
+              AND EXTRACT(YEAR FROM d.ngaydatve) = $1
+              AND EXTRACT(MONTH FROM d.ngaydatve) = $2
+            GROUP BY p.tenphim
+            ORDER BY doanh_thu DESC
+        `;
+        const detailRes = await db.query(detailQuery, [year, mon]);
+
+        // 3. Lấy danh sách vé chi tiết
+        const ticketQuery = `
+            SELECT d.madondatve, d.ngaydatve, d.tongtien, d.trangthai,
+                   t.hoten, t.email,
+                   p.tenphim, lc.ngaychieu, lc.giochieu,
+                   v.maghe, v.giave as gia_ve
+            FROM dondatve d
+            JOIN thongtintaikhoan t ON d.id_khach = t.id_khach
+            JOIN vexemphim v ON d.madondatve = v.madondatve
+            JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
+            JOIN phim p ON lc.maphim = p.maphim
+            WHERE d.trangthai = 'paid'
+              AND EXTRACT(YEAR FROM d.ngaydatve) = $1
+              AND EXTRACT(MONTH FROM d.ngaydatve) = $2
+            ORDER BY d.ngaydatve DESC
+        `;
+        const ticketRes = await db.query(ticketQuery, [year, mon]);
+
+        // 4. Tạo file XLSX bằng ExcelJS
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'Nhom 7 Cinema';
+        workbook.created = new Date();
+
+        // ===== Sheet 1: TỔNG QUAN =====
+        const sheetSummary = workbook.addWorksheet('Tổng Quan');
+        
+        // Tiêu đề
+        sheetSummary.mergeCells('A1:D1');
+        const titleCell = sheetSummary.getCell('A1');
+        titleCell.value = `BÁO CÁO DOANH THU THÁNG ${mon}/${year}`;
+        titleCell.font = { size: 16, bold: true, color: { argb: 'FFFFFF' } };
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2F5496' } };
+        titleCell.alignment = { horizontal: 'center' };
+
+        sheetSummary.addRow([]);
+        sheetSummary.addRow(['Tổng số đơn đặt vé:', parseInt(summary.tong_don)]);
+        sheetSummary.addRow(['Tổng số vé bán ra:', parseInt(summary.tong_ve)]);
+        sheetSummary.addRow(['Tổng doanh thu (VND):', parseInt(summary.tong_doanh_thu)]);
+
+        // Style cho cột
+        sheetSummary.getColumn(1).width = 25;
+        sheetSummary.getColumn(2).width = 20;
+
+        // ===== Sheet 2: DOANH THU THEO PHIM =====
+        const sheetDetail = workbook.addWorksheet('Doanh Thu Theo Phim');
+        
+        sheetDetail.columns = [
+            { header: 'Tên Phim', key: 'tenphim', width: 35 },
+            { header: 'Số Vé', key: 'so_ve', width: 12 },
+            { header: 'Doanh Thu (VND)', key: 'doanh_thu', width: 20 },
+        ];
+
+        // Style header
+        sheetDetail.getRow(1).font = { bold: true, color: { argb: 'FFFFFF' } };
+        sheetDetail.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2F5496' } };
+
+        for (const row of detailRes.rows) {
+            sheetDetail.addRow({
+                tenphim: row.tenphim,
+                so_ve: parseInt(row.so_ve),
+                doanh_thu: parseInt(row.doanh_thu)
+            });
+        }
+
+        // Dòng tổng cộng
+        const totalRow = sheetDetail.addRow({
+            tenphim: 'TỔNG CỘNG',
+            so_ve: detailRes.rows.reduce((sum, r) => sum + parseInt(r.so_ve), 0),
+            doanh_thu: detailRes.rows.reduce((sum, r) => sum + parseInt(r.doanh_thu), 0)
+        });
+        totalRow.font = { bold: true };
+
+        // ===== Sheet 3: CHI TIẾT VÉ =====
+        const sheetTickets = workbook.addWorksheet('Chi Tiết Vé');
+        
+        sheetTickets.columns = [
+            { header: 'STT', key: 'stt', width: 6 },
+            { header: 'Mã Đơn', key: 'madondatve', width: 12 },
+            { header: 'Khách Hàng', key: 'hoten', width: 22 },
+            { header: 'Email', key: 'email', width: 28 },
+            { header: 'Phim', key: 'tenphim', width: 30 },
+            { header: 'Ngày Chiếu', key: 'ngaychieu', width: 14 },
+            { header: 'Giờ Chiếu', key: 'giochieu', width: 14 },
+            { header: 'Ghế', key: 'maghe', width: 10 },
+            { header: 'Giá Vé (VND)', key: 'gia_ve', width: 15 },
+            { header: 'Tổng Tiền (VND)', key: 'tongtien', width: 15 },
+            { header: 'Ngày Đặt', key: 'ngaydatve', width: 14 },
+        ];
+
+        // Style header
+        sheetTickets.getRow(1).font = { bold: true, color: { argb: 'FFFFFF' } };
+        sheetTickets.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '2F5496' } };
+
+        ticketRes.rows.forEach((t, index) => {
+            sheetTickets.addRow({
+                stt: index + 1,
+                madondatve: t.madondatve,
+                hoten: t.hoten,
+                email: t.email,
+                tenphim: t.tenphim,
+                ngaychieu: t.ngaychieu ? new Date(t.ngaychieu).toLocaleDateString('vi-VN') : 'N/A',
+                giochieu: t.giochieu ? new Date(t.giochieu).toLocaleTimeString('vi-VN') : 'N/A',
+                maghe: t.maghe,
+                gia_ve: parseInt(t.gia_ve),
+                tongtien: parseInt(t.tongtien),
+                ngaydatve: t.ngaydatve ? new Date(t.ngaydatve).toLocaleDateString('vi-VN') : 'N/A',
+            });
+        });
+
+        // Set response headers cho file XLSX
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=BaoCao_Thang_${month}.xlsx`);
+
+        await workbook.xlsx.write(res);
+        res.end();
+
+    } catch (e) {
+        console.error("Monthly Report Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi khi xuất báo cáo' });
+    }
+};

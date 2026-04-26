@@ -1,36 +1,47 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
+import 'package:intl/intl.dart';
 
-class MyTicketsScreen extends StatelessWidget {
+class MyTicketsScreen extends StatefulWidget {
   const MyTicketsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Dummy Data mô phỏng bảng VeXemPhim, LichChieu, RapPhim
-    final List<Map<String, dynamic>> tickets = [
-      {
-        'maVe': 'VX001',
-        'tenPhim': 'DUNE: HÀNH TINH CÁT 2',
-        'ngayChieu': '10/04/2024',
-        'gioChieu': '18:00',
-        'rapPhim': 'Nhóm 7 Cinema Sư Vạn Hạnh',
-        'phong': 'PR01',
-        'ghe': 'F3, F4',
-        'trangThai': 'upcoming', // upcoming, passed
-        'imageUrl': 'https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2TGbiROox.jpg',
-      },
-      {
-        'maVe': 'VX002',
-        'tenPhim': 'MAI',
-        'ngayChieu': '06/03/2024',
-        'gioChieu': '20:15',
-        'rapPhim': 'Nhóm 7 Cinema Gò Vấp',
-        'phong': 'PR03',
-        'ghe': 'H5, H6',
-        'trangThai': 'passed',
-        'imageUrl': 'https://upload.wikimedia.org/wikipedia/vi/a/a8/Mai_2024_poster.jpg',
-      },
-    ];
+  State<MyTicketsScreen> createState() => _MyTicketsScreenState();
+}
 
+class _MyTicketsScreenState extends State<MyTicketsScreen> {
+  List<dynamic> _history = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchHistory();
+  }
+
+  Future<void> _fetchHistory() async {
+    try {
+      final history = await ApiService.fetchBookingHistory();
+      if (mounted) {
+        setState(() {
+          // Chỉ hiển thị các đơn vé đã thanh toán thành công (trangThai == 'paid')
+          _history = history.where((h) => h['trangThai'] == 'paid' || h['trangThai'] == 'completed').toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Không thể tải lịch sử vé';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -39,12 +50,35 @@ class MyTicketsScreen extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.black),
         elevation: 1,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: tickets.length,
-        itemBuilder: (context, index) {
-          final ticket = tickets[index];
-          bool isUpcoming = ticket['trangThai'] == 'upcoming';
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator())
+        : _errorMessage != null
+          ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)))
+          : _history.isEmpty
+            ? const Center(child: Text('Bạn chưa có vé nào'))
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _history.length,
+                itemBuilder: (context, index) {
+                  final ticket = _history[index];
+                  // parse dateTime để so sánh xem phim đã chiếu chưa
+                  bool isUpcoming = true;
+                  String dateDisplay = ticket['ngayChieu']?.toString().split('T')[0] ?? '';
+                  String timeDisplay = ticket['gioChieu'] ?? '';
+                  
+                  if (dateDisplay.isNotEmpty && timeDisplay.isNotEmpty) {
+                    try {
+                       final dt = DateTime.parse('${dateDisplay}T$timeDisplay');
+                       if (dt.isBefore(DateTime.now())) {
+                         isUpcoming = false;
+                       }
+                    } catch (_) {}
+                  }
+
+                  String seats = '';
+                  if (ticket['tickets'] != null) {
+                    seats = (ticket['tickets'] as List).map((t) => t['maGhe']).join(', ');
+                  }
 
           return Container(
             margin: const EdgeInsets.only(bottom: 16),
@@ -61,7 +95,7 @@ class MyTicketsScreen extends StatelessWidget {
                 ClipRRect(
                   borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12)),
                   child: Image.network(
-                    ticket['imageUrl'],
+                    ticket['posterUrl'] ?? '',
                     width: 100,
                     height: 160,
                     fit: BoxFit.cover,
@@ -87,11 +121,11 @@ class MyTicketsScreen extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text('${ticket['gioChieu']} - ${ticket['ngayChieu']}', style: TextStyle(color: isUpcoming ? const Color(0xFFE51937) : Colors.grey, fontWeight: FontWeight.bold)),
+                        Text('$timeDisplay - $dateDisplay', style: TextStyle(color: isUpcoming ? const Color(0xFFE51937) : Colors.grey, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
-                        Text(ticket['rapPhim'], style: const TextStyle(color: Colors.black87, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        Text(ticket['tenRapPhim'] ?? '', style: const TextStyle(color: Colors.black87, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 4),
-                        Text('Phòng: ${ticket['phong']} | Ghế: ${ticket['ghe']}', style: const TextStyle(color: Colors.black87, fontSize: 13)),
+                        Text('Phòng: ${ticket['tenPhong'] ?? ''} | Ghế: $seats', style: const TextStyle(color: Colors.black87, fontSize: 13)),
                         const SizedBox(height: 12),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

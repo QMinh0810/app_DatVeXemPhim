@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../viewmodels/movie_viewmodel.dart';
 import '../widgets/promo_slider.dart';
 import '../widgets/feature_grid.dart';
 import '../widgets/movie_list.dart';
@@ -20,15 +22,21 @@ class _HomeScreenState extends State<HomeScreen> {
   // Render content based on selected tab
   Widget _buildBody() {
     if (_selectedIndex == 0) {
-      return const SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            PromoSlider(),
-            SizedBox(height: 16),
-            MovieList(),
-            SizedBox(height: 24),
-          ],
+      return RefreshIndicator(
+        onRefresh: () async {
+          await context.read<MovieViewModel>().fetchMovies();
+        },
+        child: const SingleChildScrollView(
+          physics: AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              PromoSlider(),
+              SizedBox(height: 16),
+              MovieList(),
+              SizedBox(height: 24),
+            ],
+          ),
         ),
       );
     } else if (_selectedIndex == 1) {

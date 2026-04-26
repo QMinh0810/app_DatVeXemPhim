@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 class BookingViewModel extends ChangeNotifier {
   MovieModel? _selectedMovie;
   List<String> _selectedSeats = [];
+  List<String> _bookedSeats = [];
   String _paymentMethod = 'momo';
   double _seatPrice = 100000.0;
   String? _selectedShowtimeId;
@@ -19,6 +20,7 @@ class BookingViewModel extends ChangeNotifier {
 
   MovieModel? get selectedMovie => _selectedMovie;
   List<String> get selectedSeats => _selectedSeats;
+  List<String> get bookedSeats => _bookedSeats;
   String get paymentMethod => _paymentMethod;
   double get totalPrice => _selectedSeats.length * _seatPrice;
   String? get selectedShowtimeId => _selectedShowtimeId;
@@ -50,11 +52,36 @@ class BookingViewModel extends ChangeNotifier {
   }
 
   void toggleSeat(String seatName) {
+    if (_bookedSeats.contains(seatName)) return;
+    
     if (_selectedSeats.contains(seatName)) {
       _selectedSeats.remove(seatName);
     } else {
       _selectedSeats.add(seatName);
     }
+    notifyListeners();
+  }
+
+  Future<void> fetchSeatMap() async {
+    if (_selectedShowtimeId == null) return;
+    
+    _isLoading = true;
+    notifyListeners();
+    
+    try {
+      final res = await ApiService.fetchSeats(_selectedShowtimeId!);
+      if (res['status'] == 'success') {
+        final List<dynamic> seatsList = res['data']['seats'];
+        _bookedSeats = seatsList
+            .where((seat) => seat['isBooked'] == true)
+            .map<String>((seat) => seat['maghe'].toString())
+            .toList();
+      }
+    } catch (e) {
+      _errorMessage = 'Không thể tải sơ đồ ghế';
+    }
+    
+    _isLoading = false;
     notifyListeners();
   }
 
@@ -117,6 +144,7 @@ class BookingViewModel extends ChangeNotifier {
 
   void resetBooking() {
     _selectedSeats.clear();
+    _bookedSeats.clear();
     _selectedShowtimeId = null;
     _selectedTheaterName = null;
     _selectedRoomName = null;

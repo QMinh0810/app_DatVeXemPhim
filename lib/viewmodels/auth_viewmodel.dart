@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 
 class AuthViewModel extends ChangeNotifier {
+  static bool _googleSignInInitialized = false;
   UserModel? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
@@ -12,6 +15,77 @@ class AuthViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get token => _token;
+
+  Future<void> tryAutoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!prefs.containsKey('jwt_token')) return;
+
+    _token = prefs.getString('jwt_token');
+    ApiService.setToken(_token);
+
+    try {
+      final res = await ApiService.fetchProfile();
+      if (res['status'] == 'success' || res['data'] != null) {
+        _currentUser = UserModel.fromJson(res['data'] ?? res['user'] ?? res);
+        notifyListeners();
+      } else {
+        // Token might be expired
+        await logout();
+      }
+    } catch (e) {
+      // Offline or server down, keep token but don't fetch user
+      notifyListeners();
+    }
+  }
+
+  Future<void> loginWithGoogle() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      if (!_googleSignInInitialized) {
+        await GoogleSignIn.instance.initialize();
+        _googleSignInInitialized = true;
+      }
+      final GoogleSignInAccount account = await GoogleSignIn.instance.authenticate(
+        scopeHint: ['email', 'profile', 'openid'],
+      );
+
+      final GoogleSignInAuthentication auth = account.authentication;
+      if (auth.idToken == null) {
+        _errorMessage = 'Không lấy được Token từ Google';
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      final response = await ApiService.googleLogin(auth.idToken!);
+      if (response['status'] == 'success') {
+        _token = response['token'];
+        ApiService.setToken(_token);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', _token!);
+
+        final userData = response['user'];
+        _currentUser = UserModel.fromJson(userData);
+      } else {
+        _errorMessage = response['message'] ?? 'Đăng nhập Google thất bại';
+      }
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        _isLoading = false;
+        notifyListeners();
+        return; // User canceled
+      }
+      _errorMessage = 'Lỗi kết nối Google Login';
+    } catch (e) {
+      _errorMessage = 'Lỗi kết nối Google Login';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
 
   Future<void> login(String username, String password) async {
     _isLoading = true;
@@ -25,6 +99,8 @@ class AuthViewModel extends ChangeNotifier {
         // Lưu JWT Token
         _token = response['token'];
         ApiService.setToken(_token);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', _token!);
 
         // Parse user data
         final userData = response['user'];
@@ -79,10 +155,17 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  void logout() {
+  Future<void> logout() async {
     _currentUser = null;
     _token = null;
     ApiService.setToken(null);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('jwt_token');
+    
+    try {
+      await GoogleSignIn.instance.signOut();
+    } catch (_) {}
+    
     notifyListeners();
   }
 }
