@@ -3,12 +3,52 @@ import '../models/booking_model.dart';
 import '../models/movie_model.dart';
 import '../services/api_service.dart';
 
+/// Model đại diện cho 1 ghế ngồi từ API
+class SeatData {
+  final String maghe;
+  final String mahangghe; // Ký tự hàng: A, B, C...
+  final int soghe;         // Số ghế: 1, 2, 3...
+  final String loaighe;    // 'normal', 'vip', 'couple', 'hỏng'
+  final double hesogiaghe; // Hệ số nhân giá vé
+  final bool isBooked;     // Đã được đặt chưa
+
+  SeatData({
+    required this.maghe,
+    required this.mahangghe,
+    required this.soghe,
+    required this.loaighe,
+    required this.hesogiaghe,
+    required this.isBooked,
+  });
+
+  /// Tên hiển thị: VD "A1", "B3"
+  String get displayName => '$mahangghe$soghe';
+
+  /// Ghế có bị hỏng không
+  bool get isBroken => loaighe == 'hỏng';
+
+  /// Có thể chọn được không (không bị hỏng và chưa đặt)
+  bool get isSelectable => !isBroken && !isBooked;
+
+  factory SeatData.fromJson(Map<String, dynamic> json) {
+    return SeatData(
+      maghe: json['maghe']?.toString() ?? '',
+      mahangghe: json['mahangghe']?.toString() ?? '',
+      soghe: int.tryParse(json['soghe']?.toString() ?? '0') ?? 0,
+      loaighe: json['loaighe']?.toString() ?? 'hỏng', // Mặc định là hỏng nếu không có
+      hesogiaghe: double.tryParse(json['hesogiaghe']?.toString() ?? '1') ?? 1.0,
+      isBooked: json['isBooked'] == true,
+    );
+  }
+}
+
 class BookingViewModel extends ChangeNotifier {
   MovieModel? _selectedMovie;
-  List<String> _selectedSeats = [];
+  final List<String> _selectedSeats = [];
   List<String> _bookedSeats = [];
+  List<SeatData> _seatMap = []; // Full seat data từ API
   String _paymentMethod = 'momo';
-  double _seatPrice = 100000.0;
+  double _seatPrice = 100000.0; // Giá vé cơ sở từ lịch chiếu
   String? _selectedShowtimeId;
   String? _selectedTheaterName;
   String? _selectedRoomName;
@@ -21,8 +61,9 @@ class BookingViewModel extends ChangeNotifier {
   MovieModel? get selectedMovie => _selectedMovie;
   List<String> get selectedSeats => _selectedSeats;
   List<String> get bookedSeats => _bookedSeats;
+  List<SeatData> get seatMap => _seatMap;
   String get paymentMethod => _paymentMethod;
-  double get totalPrice => _selectedSeats.length * _seatPrice;
+  double get basePrice => _seatPrice;
   String? get selectedShowtimeId => _selectedShowtimeId;
   String? get selectedTheaterName => _selectedTheaterName;
   String? get selectedRoomName => _selectedRoomName;
@@ -31,6 +72,53 @@ class BookingViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get bookingResult => _bookingResult;
+
+  /// Tính tổng tiền vé dựa trên hệ số giá của từng ghế
+  double get totalPrice {
+    double total = 0;
+    for (final seatName in _selectedSeats) {
+      final seatData = _seatMap.firstWhere(
+        (s) => s.maghe == seatName,
+        orElse: () => SeatData(
+          maghe: seatName, mahangghe: '', soghe: 0,
+          loaighe: 'normal', hesogiaghe: 1.0, isBooked: false,
+        ),
+      );
+      total += _seatPrice * seatData.hesogiaghe;
+    }
+    return total;
+  }
+
+  /// Lấy SeatData từ maghe
+  SeatData? getSeatData(String maghe) {
+    try {
+      return _seatMap.firstWhere((s) => s.maghe == maghe);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Lấy danh sách các hàng ghế duy nhất (đã sắp xếp)
+  List<String> get seatRows {
+    final rows = _seatMap.map((s) => s.mahangghe).toSet().toList();
+    rows.sort();
+    return rows;
+  }
+
+  /// Lấy số cột tối đa
+  int get maxCols {
+    if (_seatMap.isEmpty) return 0;
+    return _seatMap.map((s) => s.soghe).reduce((a, b) => a > b ? a : b);
+  }
+
+  /// Lấy ghế tại vị trí hàng + cột cụ thể
+  SeatData? getSeatAt(String row, int col) {
+    try {
+      return _seatMap.firstWhere((s) => s.mahangghe == row && s.soghe == col);
+    } catch (_) {
+      return null;
+    }
+  }
 
   void selectMovie(MovieModel movie) {
     _selectedMovie = movie;
@@ -54,6 +142,10 @@ class BookingViewModel extends ChangeNotifier {
   void toggleSeat(String seatName) {
     if (_bookedSeats.contains(seatName)) return;
     
+    // Kiểm tra ghế hỏng
+    final seatData = getSeatData(seatName);
+    if (seatData != null && seatData.isBroken) return;
+    
     if (_selectedSeats.contains(seatName)) {
       _selectedSeats.remove(seatName);
     } else {
@@ -72,9 +164,14 @@ class BookingViewModel extends ChangeNotifier {
       final res = await ApiService.fetchSeats(_selectedShowtimeId!);
       if (res['status'] == 'success') {
         final List<dynamic> seatsList = res['data']['seats'];
-        _bookedSeats = seatsList
-            .where((seat) => seat['isBooked'] == true)
-            .map<String>((seat) => seat['maghe'].toString())
+        
+        // Parse full seat data
+        _seatMap = seatsList.map<SeatData>((seat) => SeatData.fromJson(seat)).toList();
+        
+        // Cập nhật danh sách ghế đã đặt
+        _bookedSeats = _seatMap
+            .where((seat) => seat.isBooked)
+            .map<String>((seat) => seat.maghe)
             .toList();
       }
     } catch (e) {
@@ -145,6 +242,7 @@ class BookingViewModel extends ChangeNotifier {
   void resetBooking() {
     _selectedSeats.clear();
     _bookedSeats.clear();
+    _seatMap.clear();
     _selectedShowtimeId = null;
     _selectedTheaterName = null;
     _selectedRoomName = null;
