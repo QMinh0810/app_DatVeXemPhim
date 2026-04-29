@@ -96,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextFormField(
                 controller: _usernameController,
                 decoration: InputDecoration(
-                  labelText: 'Mã tài khoản / SĐT / Email',
+                  labelText: 'SĐT / Email',
                   prefixIcon: const Icon(Icons.person_outline),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   filled: true,
@@ -160,8 +160,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 builder: (context, authVM, child) {
                   return OutlinedButton.icon(
                     onPressed: authVM.isLoading ? null : _loginWithGoogle,
-                    icon: Image.network(
-                      'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg',
+                    icon: Image.asset(
+                      'lib/images/google_logo.png',
                       height: 24,
                     ),
                     label: const Text('Đăng nhập với Google', style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),

@@ -5,6 +5,7 @@ import 'login_screen.dart';
 import 'account_info_screen.dart';
 import 'transaction_history_screen.dart';
 import 'my_tickets_screen.dart';
+import 'change_password_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -91,7 +92,16 @@ class ProfileScreen extends StatelessWidget {
                     }
                   ),
                   const Divider(height: 1),
-                  _buildMenuItem(Icons.lock_outline, 'Thay đổi mật khẩu', onTap: () {}),
+                  _buildMenuItem(
+                    Icons.lock_outline, 
+                    'Thay đổi mật khẩu', 
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
+                      );
+                    }
+                  ),
                   const Divider(height: 1),
                   _buildMenuItem(Icons.settings, 'Cài đặt ứng dụng', onTap: () {}),
                 ],

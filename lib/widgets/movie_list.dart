@@ -15,7 +15,7 @@ class _MovieListState extends State<MovieList> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<MovieViewModel>().fetchMovies();
+      context.read<MovieViewModel >().fetchMovies();
       context.read<MovieViewModel>().fetchHotMovies();
     });
   }

@@ -71,7 +71,7 @@ class PaymentScreen extends StatelessWidget {
                       Text('Rạp: ${bookingVM.selectedTheaterName ?? "Chưa rõ"}'),
                       Text('Phòng: ${bookingVM.selectedRoomName ?? "Chưa rõ"}'),
                       Text('Suất chiếu: ${bookingVM.selectedTimeDisplay ?? "--:--"} - ${bookingVM.selectedDateDisplay ?? "--/--/----"}'),
-                      Text('Ghế: ${seats.join(", ")}'),
+                      Text('Ghế: ${seats.map((id) => bookingVM.getSeatData(id)?.displayName ?? id).join(", ")}'),
                       const Divider(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

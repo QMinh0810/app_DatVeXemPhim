@@ -48,6 +48,7 @@ class AuthViewModel extends ChangeNotifier {
         await GoogleSignIn.instance.initialize();
         _googleSignInInitialized = true;
       }
+
       final GoogleSignInAccount account = await GoogleSignIn.instance.authenticate(
         scopeHint: ['email', 'profile', 'openid'],
       );
@@ -78,9 +79,9 @@ class AuthViewModel extends ChangeNotifier {
         notifyListeners();
         return; // User canceled
       }
-      _errorMessage = 'Lỗi kết nối Google Login';
+      _errorMessage = 'Lỗi kết nối Google: ${e.code} - ${e.toString()}';
     } catch (e) {
-      _errorMessage = 'Lỗi kết nối Google Login';
+      _errorMessage = 'Lỗi không xác định: $e';
     }
 
     _isLoading = false;

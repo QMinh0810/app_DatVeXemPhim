@@ -15,7 +15,6 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   
-  String _maTaiKhoan = '';
   int _gender = 1; // 1: Nam, 0: Nữ
   DateTime _selectedDate = DateTime(2000, 1, 1);
   bool _isLoading = false;
@@ -27,7 +26,6 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
       final user = context.read<AuthViewModel>().currentUser;
       if (user != null) {
         setState(() {
-          _maTaiKhoan = user.id;
           _nameController.text = user.fullName;
           _phoneController.text = user.phone;
           _emailController.text = user.email;
@@ -98,16 +96,6 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             ),
             const SizedBox(height: 32),
 
-            _buildTitle('MÃ TÀI KHOẢN'),
-            TextFormField(
-              key: Key(_maTaiKhoan), // Force rebuild when _maTaiKhoan changes
-              initialValue: _maTaiKhoan.isEmpty ? 'Chưa rõ' : _maTaiKhoan,
-              readOnly: true,
-              style: const TextStyle(color: Colors.grey),
-              decoration: _inputDecoration().copyWith(fillColor: Colors.grey[100]),
-            ),
-            const SizedBox(height: 16),
-
             _buildTitle('HỌ VÀ TÊN'),
             TextFormField(
               controller: _nameController,
@@ -137,19 +125,23 @@ class _AccountInfoScreenState extends State<AccountInfoScreen> {
             ),
             const SizedBox(height: 16),
 
-            _buildTitle('SỐ ĐIỆN THOẠI'), // Có thể Readonly tùy nghiệp vụ
+            _buildTitle('SỐ ĐIỆN THOẠI'),
             TextFormField(
               controller: _phoneController,
+              readOnly: true,
+              style: const TextStyle(color: Colors.grey),
               keyboardType: TextInputType.phone,
-              decoration: _inputDecoration(),
+              decoration: _inputDecoration().copyWith(fillColor: Colors.grey[100]),
             ),
             const SizedBox(height: 16),
 
             _buildTitle('EMAIL'),
             TextFormField(
               controller: _emailController,
+              readOnly: true,
+              style: const TextStyle(color: Colors.grey),
               keyboardType: TextInputType.emailAddress,
-              decoration: _inputDecoration(),
+              decoration: _inputDecoration().copyWith(fillColor: Colors.grey[100]),
             ),
             const SizedBox(height: 32),
 

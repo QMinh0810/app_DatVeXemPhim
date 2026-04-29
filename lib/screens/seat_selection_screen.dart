@@ -26,8 +26,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   static const Color _vipColor = Color(0xFFE53935);
   // Ghế Couple: hồng
   static const Color _coupleColor = Color(0xFFE91E63);
-  // Ghế hỏng: xám đen
-  static const Color _brokenColor = Color(0xFF424242);
+  // Ghế hỏng/không tồn tại: xám nhạt
+  static const Color _brokenColor = Color(0xFFBDBDBD);
   // Ghế đã đặt: xám nhạt
   static const Color _bookedColor = Color(0xFF9E9E9E);
   // Ghế đang chọn: xanh lá cây
@@ -67,41 +67,44 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
     return GestureDetector(
       onTap: canTap ? () => bookingVM.toggleSeat(seat.maghe) : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        margin: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: seatColor,
-          borderRadius: BorderRadius.circular(6),
-          border: isSelected
-              ? Border.all(color: Colors.white, width: 2)
-              : null,
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: _selectedColor.withValues(alpha: 0.5),
-                    blurRadius: 6,
-                    spreadRadius: 1,
-                  )
-                ]
-              : null,
-        ),
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (icon != null)
-              Icon(icon, size: 10, color: Colors.white.withValues(alpha: 0.8)),
-            Text(
-              seat.displayName,
-              style: TextStyle(
-                fontSize: 9,
-                color: Colors.white.withValues(alpha: seat.isBroken ? 0.5 : 1.0),
-                fontWeight: FontWeight.bold,
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          margin: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: seatColor,
+            borderRadius: BorderRadius.circular(6),
+            border: isSelected
+                ? Border.all(color: Colors.white, width: 2)
+                : null,
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: _selectedColor.withValues(alpha: 0.5),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    )
+                  ]
+                : null,
+          ),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (icon != null)
+                Icon(icon, size: 10, color: Colors.white.withValues(alpha: 0.8)),
+              Text(
+                seat.displayName,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: Colors.white.withValues(alpha: seat.isBroken ? 0.5 : 1.0),
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -142,7 +145,6 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
         final rows = bookingVM.seatRows;
         final maxCols = bookingVM.maxCols;
-        final hasSeatData = bookingVM.seatMap.isNotEmpty;
 
         return Scaffold(
           appBar: AppBar(
@@ -174,65 +176,58 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
               
               // Sơ đồ ghế ngồi
               Expanded(
-                child: hasSeatData
-                    ? InteractiveViewer(
-                        minScale: 0.5,
-                        maxScale: 3.0,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: rows.map((rowName) {
-                              return Row(
-                                children: [
-                                  // Label hàng (A, B, C...)
-                                  SizedBox(
-                                    width: 24,
-                                    child: Text(
-                                      rowName,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                        color: Colors.black54,
-                                      ),
-                                    ),
-                                  ),
-                                  // Các ghế trong hàng
-                                  ...List.generate(maxCols, (colIndex) {
-                                    final seat = bookingVM.getSeatAt(rowName, colIndex + 1);
-                                    if (seat == null) return Expanded(child: _buildEmptySeat());
-                                    return Expanded(child: _buildSeat(context, bookingVM, seat));
-                                  }),
-                                  // Label hàng bên phải
-                                  SizedBox(
-                                    width: 24,
-                                    child: Text(
-                                      rowName,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                        color: Colors.black54,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                      )
-                    : const Center(
-                        child: Text(
-                          'Không có dữ liệu ghế',
-                          style: TextStyle(color: Colors.grey, fontSize: 16),
-                        ),
-                      ),
+                child: InteractiveViewer(
+                  minScale: 0.5,
+                  maxScale: 3.0,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: rows.map((rowName) {
+                        return Row(
+                          children: [
+                            // Label hàng (A, B, C...)
+                            SizedBox(
+                              width: 24,
+                              child: Text(
+                                rowName,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                            // Các ghế trong hàng
+                            ...List.generate(maxCols, (colIndex) {
+                              final seat = bookingVM.getSeatAt(rowName, colIndex + 1);
+                              if (seat == null) return Expanded(child: _buildEmptySeat());
+                              return Expanded(child: _buildSeat(context, bookingVM, seat));
+                            }),
+                            // Label hàng bên phải
+                            SizedBox(
+                              width: 24,
+                              child: Text(
+                                rowName,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
               ),
 
               // Số cột ở dưới
-              if (hasSeatData && maxCols > 0)
+              if (maxCols > 0)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32.0),
                   child: Row(
@@ -266,7 +261,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                     _buildLegendItem(_normalColor, 'Thường'),
                     _buildLegendItem(_vipColor, 'VIP'),
                     _buildLegendItem(_coupleColor, 'Couple'),
-                    _buildLegendItem(_brokenColor, 'Hỏng'),
+                    _buildLegendItem(_brokenColor, 'Không khả dụng'),
                     _buildLegendItem(_bookedColor, 'Đã đặt'),
                     _buildLegendItem(_selectedColor, 'Đang chọn'),
                   ],
@@ -275,13 +270,18 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
             ],
           ),
           // Thanh thông tin đặt vé ở dưới
-          bottomNavigationBar: BottomAppBar(
-            color: Colors.white,
-            elevation: 8,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          bottomNavigationBar: SafeArea(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))
+                ]
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: Column(
@@ -308,12 +308,15 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         if (bookingVM.selectedSeats.isNotEmpty)
-                          Text(
-                            '${_formatPrice(bookingVM.totalPrice)} VNĐ',
-                            style: const TextStyle(
-                              color: Color(0xFFE51937),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              '${_formatPrice(bookingVM.totalPrice)} VNĐ',
+                              style: const TextStyle(
+                                color: Color(0xFFE51937),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                       ],
@@ -329,7 +332,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE51937),
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
                     ),
                     child: const Text('TIẾP TỤC', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),

@@ -207,6 +207,19 @@ class ApiService {
     return body['data'] ?? [];
   }
 
+  /// Đổi mật khẩu
+  static Future<Map<String, dynamic>> changePassword(String oldPassword, String newPassword) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/users/change-password'),
+      headers: _headers,
+      body: jsonEncode({
+        'oldPassword': oldPassword,
+        'newPassword': newPassword,
+      }),
+    );
+    return jsonDecode(res.body);
+  }
+
   // ==================== GOOGLE LOGIN ====================
 
   /// Đăng nhập bằng Google ID Token

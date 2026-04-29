@@ -5,33 +5,7 @@ class NotificationScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dummy Data mapped from ThongBao SQL table
-    final List<Map<String, dynamic>> notifications = [
-      {
-        'tieuDe': 'Đặt vé thành công!',
-        'noiDung': 'Đơn hàng DUNE: HÀNH TINH CÁT 2 (Ghế F3, F4) đã thanh toán hoàn tất. Mã QR đã được gửi về ví.',
-        'thoiDiemTB': '10/04/2024 10:15',
-        'daXem': false,
-        'icon': Icons.check_circle,
-        'color': Colors.green,
-      },
-      {
-        'tieuDe': 'Phim mới ra mắt: KUNG FU PANDA 4',
-        'noiDung': 'Siêu phẩm hoạt hình Kung Fu Panda phần 4 đã chính thức khởi chiếu tại các rạp.',
-        'thoiDiemTB': '08/03/2024 09:00',
-        'daXem': true,
-        'icon': Icons.movie,
-        'color': const Color(0xFFE51937),
-      },
-      {
-        'tieuDe': 'Ưu đãi giá vé VIP',
-        'noiDung': 'Giảm ngay 20% khi mua ghế VIP qua ví VNPay từ đây đến cuối tháng.',
-        'thoiDiemTB': '01/03/2024 15:30',
-        'daXem': true,
-        'icon': Icons.local_offer,
-        'color': Colors.orange,
-      },
-    ];
+    final List<Map<String, dynamic>> notifications = [];
 
     return Scaffold(
       appBar: AppBar(
@@ -40,7 +14,14 @@ class NotificationScreen extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.black),
         elevation: 1,
       ),
-      body: ListView.separated(
+      body: notifications.isEmpty
+          ? const Center(
+              child: Text(
+                'Bạn chưa có thông báo nào',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            )
+          : ListView.separated(
         itemCount: notifications.length,
         separatorBuilder: (context, index) => const Divider(height: 1),
         itemBuilder: (context, index) {

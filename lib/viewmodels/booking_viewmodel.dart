@@ -98,17 +98,14 @@ class BookingViewModel extends ChangeNotifier {
     }
   }
 
-  /// Lấy danh sách các hàng ghế duy nhất (đã sắp xếp)
+  /// Lấy danh sách các hàng ghế cố định (12 hàng)
   List<String> get seatRows {
-    final rows = _seatMap.map((s) => s.mahangghe).toSet().toList();
-    rows.sort();
-    return rows;
+    return ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
   }
 
-  /// Lấy số cột tối đa
+  /// Lấy số cột cố định (8 cột)
   int get maxCols {
-    if (_seatMap.isEmpty) return 0;
-    return _seatMap.map((s) => s.soghe).reduce((a, b) => a > b ? a : b);
+    return 8;
   }
 
   /// Lấy ghế tại vị trí hàng + cột cụ thể
@@ -116,7 +113,15 @@ class BookingViewModel extends ChangeNotifier {
     try {
       return _seatMap.firstWhere((s) => s.mahangghe == row && s.soghe == col);
     } catch (_) {
-      return null;
+      // Nếu không có trong DB thì tự động coi là ghế hỏng
+      return SeatData(
+        maghe: '${row}_$col',
+        mahangghe: row,
+        soghe: col,
+        loaighe: 'hỏng',
+        hesogiaghe: 0.0,
+        isBooked: false,
+      );
     }
   }
 

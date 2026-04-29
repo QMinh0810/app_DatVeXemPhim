@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/movie_model.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import '../screens/showtime_screen.dart';
+import '../screens/movie_info_screen.dart';
 
 class MovieCard extends StatelessWidget {
   final String title;
@@ -29,32 +30,47 @@ class MovieCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              imageUrl,
-              height: 240,
-              width: 160,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                print('Image load error: $error');
-                return Container(
-                  height: 240,
-                  width: 160,
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.image, color: Colors.grey),
+          GestureDetector(
+            onTap: () {
+              if (movie != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => MovieInfoScreen(movie: movie!)),
                 );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
+              }
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    height: 240,
+                    width: 160,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      print('Image load error: $error');
+                      return Container(
+                        height: 240,
+                        width: 160,
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.image, color: Colors.grey),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 4),

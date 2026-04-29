@@ -13,6 +13,8 @@ class ShowtimeScreen extends StatefulWidget {
 
 class _ShowtimeScreenState extends State<ShowtimeScreen> {
   List<dynamic> _showtimes = [];
+  List<String> _theaters = [];
+  String? _selectedTheater;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -36,8 +38,14 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
 
     try {
       final data = await ApiService.fetchShowtimes(movieId: movieId);
+      final theaterSet = <String>{};
+      for (final st in data) {
+        final name = st['tenraphim']?.toString();
+        if (name != null && name.isNotEmpty) theaterSet.add(name);
+      }
       setState(() {
         _showtimes = data;
+        _theaters = theaterSet.toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -98,6 +106,43 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
               ),
             ),
 
+          // Bộ lọc rạp
+          if (_theaters.isNotEmpty)
+            SizedBox(
+              height: 48,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: const Text('Tất cả'),
+                      selected: _selectedTheater == null,
+                      selectedColor: const Color(0xFFE51937),
+                      labelStyle: TextStyle(
+                        color: _selectedTheater == null ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      onSelected: (_) => setState(() => _selectedTheater = null),
+                    ),
+                  ),
+                  ..._theaters.map((theater) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(theater),
+                      selected: _selectedTheater == theater,
+                      selectedColor: const Color(0xFFE51937),
+                      labelStyle: TextStyle(
+                        color: _selectedTheater == theater ? Colors.white : Colors.black87,
+                      ),
+                      onSelected: (_) => setState(() => _selectedTheater = theater),
+                    ),
+                  )),
+                ],
+              ),
+            ),
+
           const Padding(
             padding: EdgeInsets.all(16),
             child: Text('LỊCH CHIẾU', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -111,11 +156,18 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
                     ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.grey)))
                     : _showtimes.isEmpty
                         ? const Center(child: Text('Chưa có suất chiếu cho phim này', style: TextStyle(color: Colors.grey, fontSize: 16)))
-                        : ListView.builder(
+                        : Builder(builder: (context) {
+                            final filtered = _selectedTheater == null
+                                ? _showtimes
+                                : _showtimes.where((st) => st['tenraphim'] == _selectedTheater).toList();
+                            if (filtered.isEmpty) {
+                              return const Center(child: Text('Không có suất chiếu cho rạp này', style: TextStyle(color: Colors.grey, fontSize: 16)));
+                            }
+                            return ListView.builder(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: _showtimes.length,
+                            itemCount: filtered.length,
                             itemBuilder: (context, index) {
-                              final st = _showtimes[index];
+                              final st = filtered[index];
                               final showtimeId = st['malichchieu'] ?? '';
                               final theaterName = st['tenraphim'] ?? 'Rạp chưa rõ';
                               final roomName = st['tenphong'] ?? '';
@@ -199,7 +251,8 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
                                 ),
                               );
                             },
-                          ),
+                          );
+                          }),
           ),
         ],
       ),

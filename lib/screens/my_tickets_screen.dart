@@ -77,7 +77,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
 
                   String seats = '';
                   if (ticket['tickets'] != null) {
-                    seats = (ticket['tickets'] as List).map((t) => t['maGhe']).join(', ');
+                    seats = (ticket['tickets'] as List).map((t) => t['tenGhe'] ?? t['maGhe']).join(', ');
                   }
 
           return Container(

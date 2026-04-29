@@ -4,14 +4,28 @@ const db = require('../config/db');
 exports.getMovies = async (req, res) => {
     try {
         const { status } = req.query; // 'showing' hoặc 'coming_soon'
-        let query = 'SELECT * FROM phim';
+        let query = `
+            SELECT p.*, 
+                   COALESCE(array_remove(array_agg(DISTINCT t.tentheloai), NULL), ARRAY[]::varchar[]) as genres,
+                   COALESCE(array_remove(array_agg(DISTINCT dd.tendaodien), NULL), ARRAY[]::varchar[]) as directors,
+                   COALESCE(array_remove(array_agg(DISTINCT dv.tendienvien), NULL), ARRAY[]::varchar[]) as actors
+            FROM phim p
+            LEFT JOIN phim_theloai pt ON p.maphim = pt.maphim
+            LEFT JOIN theloai t ON pt.matheloai = t.matheloai
+            LEFT JOIN phim_daodien pdd ON p.maphim = pdd.maphim
+            LEFT JOIN daodien dd ON pdd.madaodien = dd.madaodien
+            LEFT JOIN phim_dienvien pdv ON p.maphim = pdv.maphim
+            LEFT JOIN dienvien dv ON pdv.madienvien = dv.madienvien
+        `;
         let params = [];
 
         // Nếu có truyền status lên thì Lọc
         if (status) {
-            query += ' WHERE trangthai = $1';
+            query += ' WHERE p.trangthai = $1';
             params.push(status);
         }
+
+        query += ' GROUP BY p.maphim';
 
         const result = await db.query(query, params);
         res.json({ status: 'success', data: result.rows });
@@ -26,12 +40,22 @@ exports.getHotMovies = async (req, res) => {
     try {
         // Thay vì random, ta tìm các Phim có Hashtag chứa chữ "phimhot" đang được chiếu
         const queryHotMovies = `
-            SELECT p.* 
+            SELECT p.*, 
+                   COALESCE(array_remove(array_agg(DISTINCT t.tentheloai), NULL), ARRAY[]::varchar[]) as genres,
+                   COALESCE(array_remove(array_agg(DISTINCT dd.tendaodien), NULL), ARRAY[]::varchar[]) as directors,
+                   COALESCE(array_remove(array_agg(DISTINCT dv.tendienvien), NULL), ARRAY[]::varchar[]) as actors
             FROM phim p
             JOIN phim_hashtag ph ON p.maphim = ph.maphim
             JOIN hashtag h ON ph.mahashtag = h.mahashtag
+            LEFT JOIN phim_theloai pt ON p.maphim = pt.maphim
+            LEFT JOIN theloai t ON pt.matheloai = t.matheloai
+            LEFT JOIN phim_daodien pdd ON p.maphim = pdd.maphim
+            LEFT JOIN daodien dd ON pdd.madaodien = dd.madaodien
+            LEFT JOIN phim_dienvien pdv ON p.maphim = pdv.maphim
+            LEFT JOIN dienvien dv ON pdv.madienvien = dv.madienvien
             WHERE REPLACE(LOWER(h.tenhashtag), ' ', '') ILIKE $1 
-            AND p.trangthai = 'now_showing'
+            AND p.trangthai = 'showing'
+            GROUP BY p.maphim
             LIMIT 5
         `;
         const result = await db.query(queryHotMovies, ['%phimhot%']);
@@ -46,7 +70,22 @@ exports.getHotMovies = async (req, res) => {
 exports.getMovieById = async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await db.query('SELECT * FROM phim WHERE maphim = $1', [id]);
+        const query = `
+            SELECT p.*, 
+                   COALESCE(array_remove(array_agg(DISTINCT t.tentheloai), NULL), ARRAY[]::varchar[]) as genres,
+                   COALESCE(array_remove(array_agg(DISTINCT dd.tendaodien), NULL), ARRAY[]::varchar[]) as directors,
+                   COALESCE(array_remove(array_agg(DISTINCT dv.tendienvien), NULL), ARRAY[]::varchar[]) as actors
+            FROM phim p
+            LEFT JOIN phim_theloai pt ON p.maphim = pt.maphim
+            LEFT JOIN theloai t ON pt.matheloai = t.matheloai
+            LEFT JOIN phim_daodien pdd ON p.maphim = pdd.maphim
+            LEFT JOIN daodien dd ON pdd.madaodien = dd.madaodien
+            LEFT JOIN phim_dienvien pdv ON p.maphim = pdv.maphim
+            LEFT JOIN dienvien dv ON pdv.madienvien = dv.madienvien
+            WHERE p.maphim = $1
+            GROUP BY p.maphim
+        `;
+        const result = await db.query(query, [id]);
         
         if (result.rows.length === 0) {
             return res.status(404).json({ status: 'error', message: 'Không tìm thấy phim' });
@@ -62,15 +101,25 @@ exports.getMovieById = async (req, res) => {
 exports.searchMovies = async (req, res) => {
     try {
         const { name, genre } = req.query;
-        let query = 'SELECT p.* FROM phim p ';
+        let query = `
+            SELECT p.*, 
+                   COALESCE(array_remove(array_agg(DISTINCT t.tentheloai), NULL), ARRAY[]::varchar[]) as genres,
+                   COALESCE(array_remove(array_agg(DISTINCT dd.tendaodien), NULL), ARRAY[]::varchar[]) as directors,
+                   COALESCE(array_remove(array_agg(DISTINCT dv.tendienvien), NULL), ARRAY[]::varchar[]) as actors
+            FROM phim p
+            LEFT JOIN phim_theloai pt ON p.maphim = pt.maphim
+            LEFT JOIN theloai t ON pt.matheloai = t.matheloai
+            LEFT JOIN phim_daodien pdd ON p.maphim = pdd.maphim
+            LEFT JOIN daodien dd ON pdd.madaodien = dd.madaodien
+            LEFT JOIN phim_dienvien pdv ON p.maphim = pdv.maphim
+            LEFT JOIN dienvien dv ON pdv.madienvien = dv.madienvien
+        `;
         let conditions = [];
         let params = [];
         let paramIndex = 1;
 
         if (genre) {
-            // Join qua bảng trung gian Phim_TheLoai
-            query += ' JOIN phim_theloai pt ON p.maphim = pt.maphim JOIN theloai t ON pt.matheloai = t.matheloai ';
-            conditions.push(`t.tentheloai ILIKE $${paramIndex}`);
+            conditions.push(`p.maphim IN (SELECT pt2.maphim FROM phim_theloai pt2 JOIN theloai t2 ON pt2.matheloai = t2.matheloai WHERE t2.tentheloai ILIKE $${paramIndex})`);
             params.push(`%${genre}%`);
             paramIndex++;
         }
@@ -84,6 +133,8 @@ exports.searchMovies = async (req, res) => {
         if (conditions.length > 0) {
             query += ' WHERE ' + conditions.join(' AND ');
         }
+        
+        query += ' GROUP BY p.maphim';
 
         const result = await db.query(query, params);
         res.json({ status: 'success', data: result.rows });

@@ -8,6 +8,8 @@ class MovieModel {
   final String posterUrl;
   final String? trailerUrl;
   final List<String> genres;
+  final List<String> directors;
+  final List<String> actors;
   final String status; // 'showing' hoặc 'coming_soon'
 
   MovieModel({
@@ -20,6 +22,8 @@ class MovieModel {
     required this.posterUrl,
     this.trailerUrl,
     required this.genres,
+    required this.directors,
+    required this.actors,
     required this.status,
   });
 
@@ -36,8 +40,10 @@ class MovieModel {
       ratingLimit: json['gioihantuoi'] ?? 0,
       posterUrl: json['poster_url'] ?? '',
       trailerUrl: json['trailer_url'],
-      genres: [], // Genres cần JOIN riêng, tạm để rỗng
-      status: json['trangthai'] ?? 'showing',
+      genres: (json['genres'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      directors: (json['directors'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      actors: (json['actors'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      status: json['trangthai'] ?? 'now_showing',
     );
   }
 
@@ -51,6 +57,8 @@ class MovieModel {
     String? posterUrl,
     String? trailerUrl,
     List<String>? genres,
+    List<String>? directors,
+    List<String>? actors,
     String? status,
   }) {
     return MovieModel(
@@ -63,6 +71,8 @@ class MovieModel {
       posterUrl: posterUrl ?? this.posterUrl,
       trailerUrl: trailerUrl ?? this.trailerUrl,
       genres: genres ?? this.genres,
+      directors: directors ?? this.directors,
+      actors: actors ?? this.actors,
       status: status ?? this.status,
     );
   }

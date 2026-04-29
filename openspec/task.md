@@ -1,5 +1,9 @@
-1. Trong seat_selection_screen.dart: hiển thị đầy đủ số ghế mặc định (12 hàng 8 cột, 6 hàng ghế thường, 2 hàng couple và 2 hàng vip ), những ghế không tồn tại trong database thì để màu xám đen (ghế hỏng)
-2. Trong màn hình chính, sửa sử dụng hình google_logo.png trong folder lib/images/  làm icon cho nút đăng nhập bằng google
-3. Nút đăng nhập bằng google trong màn hình login hiện tại bị lỗi, nhấn vào hiển thị thông báo "Lỗi kết nối tới google login"
-4. Kiểm tra lại controller gọi api register, hiện tại dù hiện đăng ký thành công nhưng không gọi API, neon không nhận được thông tin gì dù test postman thì bình thường
-5. Xoá data fake được mock trong phần thông báo
+- [x] UI Trang chủ bỏ phần mã tài khoản trên thông tin đăng nhập
+- [x] kiểm tra lại xem Trang chủ chưa hiển thị phim có hashtag #phimhot (Fixed typo in status)
+- [x] UI movie_list_screen.dart Thêm chức năng phần tìm kiếm phim và lọc phim theo thể loại
+- [x] UI account_info_screen.dart Thông tin tài khoản dư phần Mã tài khoản ( bỏ đi)
+- [x] UI account_info_screen.dart Tài khoản hiện tại không cho thay đổi sdt và email
+- [x] UI showtime_screen.dart Cập nhật thông tin rạp vào trong phần chọn lịch chiếu, UI nên có thêm bộ lọc theo rạp 
+- [x] thiết kế UI đổi mật khẩu giống ảnh ChangPasswordScreen.jpg
+- [x] thiêt kế UI thông tin phim giống ảnh MovieInfo.jpg
+- [x] thiết kế lại UI seat_selection_screen.dart các ghế hỏng ... màu xám

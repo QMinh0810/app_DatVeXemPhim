@@ -29,7 +29,7 @@ router.post('/showtimes', showtimeAdminController.createShowtime);
 // Xem danh sách ghế theo phòng
 router.get('/rooms/:id/seats', roomAdminController.getSeatsByRoom);
 // Cập nhật loại ghế (normal/vip/couple/hỏng)
-router.put('/seats/:maGhe', roomAdminController.updateSeatType);
+router.put('/seats/:maGhe/status', roomAdminController.updateSeatType);
 
 // ==================== KHÁCH HÀNG & ĐƠN VÉ ====================
 router.get('/bookings', customerAdminController.getBookings);
