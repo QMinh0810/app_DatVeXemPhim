@@ -8,10 +8,18 @@ const db = require('../../config/db');
  */
 exports.createShowtime = async (req, res) => {
     try {
-        const { maPhim, maPhong, ngayChieu, gioChieu, giaVe } = req.body;
+        // Hỗ trợ cả camelCase (từ Flutter) và lowercase (từ Web/Postman)
+        const maPhim    = req.body.maPhim    || req.body.maphim;
+        const maPhong   = req.body.maPhong   || req.body.maphong;
+        const ngayChieu = req.body.ngayChieu || req.body.ngaychieu;
+        const gioChieu  = req.body.gioChieu  || req.body.giochieu;
+        const giaVe     = req.body.giaVe     || req.body.giave;
 
         if (!maPhim || !maPhong || !ngayChieu || !gioChieu || !giaVe) {
-            return res.status(400).json({ status: 'error', message: 'Vui lòng điền đầy đủ thông tin: maPhim, maPhong, ngayChieu, gioChieu, giaVe' });
+            return res.status(400).json({
+                status: 'error',
+                message: 'Vui lòng điền đầy đủ thông tin: maPhim, maPhong, ngayChieu, gioChieu, giaVe'
+            });
         }
 
         // 1. Lấy thời lượng phim từ bảng Phim
@@ -23,12 +31,18 @@ exports.createShowtime = async (req, res) => {
 
         // 2. Tự động tính giờ kết thúc = giờ chiếu + thời lượng phim + 15 phút nghỉ
         const gioChieuDate = new Date(gioChieu);
+        if (isNaN(gioChieuDate.getTime())) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Định dạng gioChieu không hợp lệ. Dùng ISO 8601 (VD: 2024-05-15T19:00:00)'
+            });
+        }
         const gioKetThucDate = new Date(gioChieuDate.getTime() + (thoiLuong + 15) * 60 * 1000);
         const gioKetThuc = gioKetThucDate.toISOString();
 
         // 3. Kiểm tra trùng lịch chiếu (chồng chéo giờ tại cùng phòng)
         const overlapQuery = `
-            SELECT * FROM lichchieu 
+            SELECT malichchieu, giochieu, gioketthuc FROM lichchieu 
             WHERE maphong = $1 
               AND ngaychieu::date = $2::date
               AND (
@@ -45,24 +59,32 @@ exports.createShowtime = async (req, res) => {
             });
         }
 
-        // 4. Sinh mã lịch chiếu
-        const maxRes = await db.query("SELECT COUNT(*) as cnt FROM lichchieu");
-        const maLichChieu = 'LC' + String(parseInt(maxRes.rows[0].cnt) + 1).padStart(3, '0');
+        // 4. Sinh mã lịch chiếu an toàn bằng timestamp (tránh trùng khi xóa data)
+        const maLichChieu = `LC-${Date.now()}`;
 
-        // 5. Insert
+        // 5. Insert vào database
         const insertQuery = `
             INSERT INTO lichchieu (malichchieu, ngaychieu, giochieu, gioketthuc, giave, maphim, maphong)
             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
         `;
-        const result = await db.query(insertQuery, [maLichChieu, ngayChieu, gioChieu, gioKetThuc, giaVe, maPhim, maPhong]);
+        const result = await db.query(insertQuery, [
+            maLichChieu,
+            ngayChieu,
+            gioChieu,
+            gioKetThuc,
+            parseInt(giaVe),
+            maPhim,
+            maPhong
+        ]);
 
         res.status(201).json({
             status: 'success',
             message: `Tạo lịch chiếu thành công. Giờ kết thúc tự động: ${gioKetThucDate.toLocaleString('vi-VN')} (thời lượng ${thoiLuong} phút + 15 phút nghỉ)`,
             data: result.rows[0]
         });
+
     } catch (e) {
         console.error("Create Showtime Error:", e);
-        res.status(500).json({ status: 'error', message: 'Lỗi khi tạo lịch chiếu' });
+        res.status(500).json({ status: 'error', message: 'Lỗi khi tạo lịch chiếu', detail: e.message });
     }
 };

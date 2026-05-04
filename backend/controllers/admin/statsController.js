@@ -9,8 +9,8 @@ exports.bookingsByMovie = async (req, res) => {
     try {
         const result = await db.query(`
             SELECT p.maphim, p.tenphim, p.poster_url,
-                   COUNT(v.mavexemphim) as so_ve,
-                   COALESCE(SUM(v.giave), 0) as tong_tien
+                   COUNT(v.mavexemphim)::int as so_ve,
+                   COALESCE(SUM(v.giave), 0)::int as tong_tien
             FROM phim p
             LEFT JOIN lichchieu lc ON p.maphim = lc.maphim
             LEFT JOIN vexemphim v ON lc.malichchieu = v.malichchieu
@@ -34,8 +34,8 @@ exports.bookingsByTheater = async (req, res) => {
     try {
         const result = await db.query(`
             SELECT r.marapphim, r.tenrapphim, r.diachi,
-                   COUNT(v.mavexemphim) as so_ve,
-                   COALESCE(SUM(v.giave), 0) as tong_tien
+                   COUNT(v.mavexemphim)::int as so_ve,
+                   COALESCE(SUM(v.giave), 0)::int as tong_tien
             FROM rapphim r
             LEFT JOIN phongrapphim pr ON r.marapphim = pr.marapphim
             LEFT JOIN lichchieu lc ON pr.maphong = lc.maphong
@@ -57,11 +57,12 @@ exports.bookingsByTheater = async (req, res) => {
  * GET /api/admin/stats/revenue-by-movie
  */
 exports.revenueByMovie = async (req, res) => {
+    console.log("Stats: Fetching revenue by movie...");
     try {
         const result = await db.query(`
             SELECT p.maphim, p.tenphim,
-                   COUNT(v.mavexemphim) as so_ve,
-                   COALESCE(SUM(v.giave), 0) as doanh_thu
+                   COUNT(v.mavexemphim)::int as so_ve,
+                   COALESCE(SUM(v.giave), 0)::int as doanh_thu
             FROM phim p
             LEFT JOIN lichchieu lc ON p.maphim = lc.maphim
             LEFT JOIN vexemphim v ON lc.malichchieu = v.malichchieu
@@ -69,6 +70,7 @@ exports.revenueByMovie = async (req, res) => {
             GROUP BY p.maphim, p.tenphim
             ORDER BY doanh_thu DESC
         `);
+        console.log(`Stats: Found ${result.rows.length} movies in stats.`);
 
         res.json({ status: 'success', data: result.rows });
     } catch (e) {
@@ -121,6 +123,56 @@ exports.dailyRevenueStats = async (req, res) => {
     } catch (e) {
         console.error("Daily Revenue Stats Error:", e);
         res.status(500).json({ status: 'error', message: 'Lỗi thống kê doanh thu theo ngày' });
+    }
+};
+
+/**
+ * Doanh thu 7 ngày gần nhất (cho biểu đồ cột tuần)
+ * GET /api/admin/stats/weekly-revenue
+ * Trả về: mảng 7 phần tử { ngay, nhan (T2-CN), doanh_thu }
+ */
+exports.weeklyRevenueStats = async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT
+                DATE(d.ngaydatve) as ngay,
+                EXTRACT(DOW FROM d.ngaydatve) as thu_trong_tuan,
+                COALESCE(SUM(CASE WHEN d.trangthai = 'paid' THEN d.tongtien ELSE 0 END), 0) as doanh_thu
+            FROM dondatve d
+            WHERE DATE(d.ngaydatve) >= CURRENT_DATE - INTERVAL '6 days'
+              AND DATE(d.ngaydatve) <= CURRENT_DATE
+            GROUP BY DATE(d.ngaydatve), EXTRACT(DOW FROM d.ngaydatve)
+            ORDER BY ngay ASC
+        `);
+
+        // Tạo mảng 7 ngày (T2 -> CN) đầy đủ, kể cả ngày không có doanh thu
+        const dayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+        const revenueMap = {};
+        result.rows.forEach(row => {
+            revenueMap[row.ngay.toISOString().split('T')[0]] = {
+                nhan: dayLabels[parseInt(row.thu_trong_tuan)],
+                doanh_thu: parseInt(row.doanh_thu)
+            };
+        });
+
+        // Đảm bảo 7 ngày đều có dữ liệu
+        const sevenDays = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            const dow = date.getDay();
+            sevenDays.push({
+                ngay: dateStr,
+                nhan: dayLabels[dow],
+                doanh_thu: revenueMap[dateStr]?.doanh_thu ?? 0
+            });
+        }
+
+        res.json({ status: 'success', data: sevenDays });
+    } catch (e) {
+        console.error("Weekly Revenue Stats Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi thống kê doanh thu theo tuần' });
     }
 };
 

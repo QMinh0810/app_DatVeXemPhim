@@ -15,6 +15,8 @@
 - [x] 3.2 Sửa `showtime_screen.dart`: thêm hàng filter chip "Tất cả" + tên các rạp phía trên list suất chiếu
 - [x] 3.3 Sửa `showtime_screen.dart`: áp dụng filter cho ListView dựa trên `_selectedTheater`
 
+
+
 ## 4. Tìm kiếm & lọc thể loại trong MovieListScreen
 
 - [x] 4.1 Chuyển `movie_list_screen.dart` từ `StatelessWidget` → `StatefulWidget`

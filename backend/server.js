@@ -28,6 +28,19 @@ app.use('/api/users', userRoutes);
 app.use('/api/concessions', concessionRoutes);
 app.use('/api/admin', adminRoutes);
 
+// TEST TRỰC TIẾP: Cập nhật poster
+app.put('/api/admin/update-poster/:id', (req, res) => {
+  console.log("!!! TEST ROUTE HIT !!! ID:", req.params.id);
+  const movieAdminController = require('./controllers/admin/movieAdminController');
+  return movieAdminController.updateMoviePoster(req, res);
+});
+
+// Middleware bắt lỗi 404 để debug
+app.use((req, res, next) => {
+  console.log(`[404] ${req.method} ${req.url} - Không tìm thấy route này!`);
+  res.status(404).send(`Cannot ${req.method} ${req.url}`);
+});
+
 // API: Kiểm tra Health
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is running on port ' + PORT });

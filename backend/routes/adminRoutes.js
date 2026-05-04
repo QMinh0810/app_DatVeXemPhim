@@ -18,6 +18,9 @@ router.post('/login', adminAuthController.login);
 // ==================== Tất cả route bên dưới yêu cầu isAdmin ====================
 router.use(isAdmin);
 
+// ĐƯA LÊN ĐẦU: Cập nhật poster
+router.put('/update-poster/:id', movieAdminController.updateMoviePoster);
+
 // ==================== PHIM & HASHTAG ====================
 router.post('/movies/:id/hashtags', movieAdminController.addHashtagToMovie);
 router.delete('/movies/:id/hashtags/:hashtagId', movieAdminController.removeHashtagFromMovie);
@@ -56,6 +59,7 @@ router.get('/stats/bookings-by-movie', statsController.bookingsByMovie);
 router.get('/stats/bookings-by-theater', statsController.bookingsByTheater);
 router.get('/stats/revenue-by-movie', statsController.revenueByMovie);
 router.get('/stats/daily-revenue', statsController.dailyRevenueStats);
+router.get('/stats/weekly-revenue', statsController.weeklyRevenueStats);
 router.get('/reports/monthly', statsController.monthlyReport);
 
 // ==================== ĐÁNH GIÁ ====================

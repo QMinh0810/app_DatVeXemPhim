@@ -1,7 +1,7 @@
 # Yêu cầu thiết kế
 
 - UI Trang chủ bỏ phần mã tài khoản trên thông tin đăng nhập ( ban đầu hiển thị maTaiKhoan/TenDangNhap/SoDienThoai)
-- kiểm tra lại xem Trang chủ chưa hiển thị phim có hashtag #phimhot
+- kiểm tra lại xem Trang chủ chưa hiển thị phim có hashtag #phimhot X
 - UI movie_list_screen.dart	Thêm chức năng phần tìm kiếm phim và lọc phim theo thể loại (cần xem lại api)
 - UI account_info_screen.dart	Thông tin tài khoản dư phần Mã tài khoản ( bỏ đi)
 - UI account_info_screen.dart	Tài khoản hiện tại không cho thay đổi sdt và email (nên bỏ 2 cái này ra khỏi phần cập nhật - khoá ô text luôn)

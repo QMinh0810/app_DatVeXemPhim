@@ -66,3 +66,37 @@ exports.removeHashtagFromMovie = async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Lỗi khi xoá hashtag' });
     }
 };
+
+/**
+ * Cập nhật poster phim (admin chỉ được cập nhật poster)
+ * PUT /api/admin/movies/:id/poster
+ * Body: { poster_url }
+ */
+exports.updateMoviePoster = async (req, res) => {
+    console.log("Admin: Update Movie Poster hit for ID:", req.params.id, "Body:", req.body);
+    try {
+        const { id } = req.params;
+        const { poster_url } = req.body;
+
+        if (!poster_url) {
+            return res.status(400).json({ status: 'error', message: 'Vui lòng cung cấp poster_url' });
+        }
+
+        const result = await db.query(
+            'UPDATE phim SET poster_url = $1 WHERE maphim = $2 RETURNING maphim, tenphim, poster_url',
+            [poster_url, id]
+        );
+
+        console.log("SQL Result rows count:", result.rowCount);
+
+        if (result.rowCount === 0) {
+            console.warn("Movie not found in DB for ID:", id);
+            return res.status(404).json({ status: 'error', message: 'Không tìm thấy phim có mã: ' + id });
+        }
+
+        res.json({ status: 'success', message: 'Cập nhật poster thành công', data: result.rows[0] });
+    } catch (e) {
+        console.error("Update Movie Poster Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi khi cập nhật poster' });
+    }
+};
