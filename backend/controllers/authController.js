@@ -170,17 +170,20 @@ exports.googleLogin = async (req, res) => {
         // Mảng các Client ID được phép (Chấp nhận cả Web và Android)
         const allowedClients = [
             process.env.GOOGLE_CLIENT_ID,
-            "356822372175-2otcs9de40p96rudrprs00o3bb1shdds.apps.googleusercontent.com" // Android ID
+            "356822372175-2otcs9de40p96rudrprs00o3bb1shdds.apps.googleusercontent.com", // Android ID (Old)
+            "356822372175-3l82628c5iefji9gu9llp04o0tfs9i7j.apps.googleusercontent.com"  // Android/Web ID (New)
         ];
 
-        console.log("=> Đang xác thực ID Token với Audience mong muốn:", allowedClients);
+        console.log("=> Đang xác thực ID Token. Audience:", allowedClients);
 
         const ticket = await client.verifyIdToken({
             idToken: idToken,
-            audience: allowedClients, // Truyền mảng để chấp nhận nhiều ID
+            audience: allowedClients,
         });
         const payload = ticket.getPayload();
         const { email, name, picture, sub: googleId } = payload;
+
+        console.log("=> Xác thực thành công Google User:", email);
 
         // 2. Kiểm tra user đã tồn tại chưa (qua email)
         let userRes = await db.query('SELECT * FROM thongtintaikhoan WHERE email = $1', [email]);
@@ -188,6 +191,7 @@ exports.googleLogin = async (req, res) => {
 
         if (userRes.rows.length === 0) {
             // 3. Nếu chưa có, tạo user mới
+            console.log("=> User mới, đang tạo tài khoản...");
             const maxRes = await db.query('SELECT COALESCE(MAX(id_khach), 0) as max_id FROM thongtintaikhoan');
             const num = parseInt(maxRes.rows[0].max_id) + 1;
             const maTaiKhoan = 'GG' + String(num).padStart(3, '0');
@@ -196,11 +200,12 @@ exports.googleLogin = async (req, res) => {
                 INSERT INTO thongtintaikhoan (mataikhoan, hoten, email, anhdaidien, matkhau, sdt, ngaysinh)
                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *
             `;
-            // matkhau để trống hoặc random vì login qua Google, SĐT tạm để googleId hoặc trống
             const newUser = await db.query(insertQuery, [maTaiKhoan, name, email, picture, 'GOOGLE_AUTH_EXTERNAL', 'GG_' + googleId.slice(-8), '2000-01-01']);
             user = newUser.rows[0];
+            console.log("=> Đã tạo user mới:", user.mataikhoan);
         } else {
             user = userRes.rows[0];
+            console.log("=> User đã tồn tại:", user.mataikhoan);
         }
 
         // 4. Ký token JWT
@@ -220,8 +225,12 @@ exports.googleLogin = async (req, res) => {
         });
 
     } catch (e) {
-        console.error("Google Login Error:", e.message);
-        res.status(401).json({ status: 'error', message: 'Xác thực Google thất bại', detail: e.message });
+        console.error("!!! Google Login Error:", e.message);
+        res.status(401).json({ 
+            status: 'error', 
+            message: 'Xác thực Google thất bại. Vui lòng kiểm tra lại Client ID hoặc Token.', 
+            detail: e.message 
+        });
     }
 };
 
