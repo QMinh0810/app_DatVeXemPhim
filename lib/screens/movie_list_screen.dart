@@ -17,6 +17,7 @@ class _MovieListScreenState extends State<MovieListScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String? _selectedGenre;
+  bool _isFilterVisible = false;
 
   @override
   void dispose() {
@@ -55,72 +56,133 @@ class _MovieListScreenState extends State<MovieListScreen> {
           ),
           body: Column(
             children: [
-              // Thanh tìm kiếm
+              // Thanh tìm kiếm + Nút lọc
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Tìm kiếm phim...',
-                    prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, color: Colors.grey),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Tìm kiếm phim...',
+                          prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, color: Colors.grey),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[50],
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        onChanged: (value) => setState(() => _searchQuery = value),
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey[300]!),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: _isFilterVisible ? const Color(0xFFE51937) : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.filter_alt_outlined, 
+                          color: _isFilterVisible ? Colors.white : Colors.black87
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _isFilterVisible = !_isFilterVisible;
+                          });
+                        },
+                      ),
                     ),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                  onChanged: (value) => setState(() => _searchQuery = value),
+                  ],
                 ),
               ),
 
-              // Bộ lọc thể loại
-              if (genreList.isNotEmpty)
-                SizedBox(
-                  height: 44,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: const Text('Tất cả'),
-                          selected: _selectedGenre == null,
-                          selectedColor: const Color(0xFFE51937),
-                          labelStyle: TextStyle(
-                            color: _selectedGenre == null ? Colors.white : Colors.black87,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          onSelected: (_) => setState(() => _selectedGenre = null),
-                        ),
+              // Bộ lọc thể loại (Hiện ra dưới dạng khung bo góc)
+              if (_isFilterVisible && genreList.isNotEmpty)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
-                      ...genreList.map((genre) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(genre),
-                          selected: _selectedGenre == genre,
-                          selectedColor: const Color(0xFFE51937),
-                          labelStyle: TextStyle(
-                            color: _selectedGenre == genre ? Colors.white : Colors.black87,
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Lọc theo thể loại',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           ),
-                          onSelected: (_) => setState(() => _selectedGenre = genre),
-                        ),
-                      )),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 20),
+                            onPressed: () => setState(() => _isFilterVisible = false),
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Tất cả'),
+                            selected: _selectedGenre == null,
+                            selectedColor: const Color(0xFFE51937),
+                            labelStyle: TextStyle(
+                              color: _selectedGenre == null ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            onSelected: (_) {
+                              setState(() {
+                                _selectedGenre = null;
+                                _isFilterVisible = false;
+                              });
+                            },
+                          ),
+                          ...genreList.map((genre) => ChoiceChip(
+                            label: Text(genre),
+                            selected: _selectedGenre == genre,
+                            selectedColor: const Color(0xFFE51937),
+                            labelStyle: TextStyle(
+                              color: _selectedGenre == genre ? Colors.white : Colors.black87,
+                            ),
+                            onSelected: (_) {
+                              setState(() {
+                                _selectedGenre = genre;
+                                _isFilterVisible = false;
+                              });
+                            },
+                          )),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -224,19 +286,27 @@ class _MovieListScreenState extends State<MovieListScreen> {
                                         SizedBox(
                                           width: double.infinity,
                                           child: ElevatedButton(
-                                            onPressed: () {
-                                              context.read<BookingViewModel>().selectMovie(movie);
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(builder: (context) => const ShowtimeScreen()),
-                                              );
-                                            },
+                                            onPressed: (movie.status == 'now_showing' || movie.status == 'showing') 
+                                              ? () {
+                                                  context.read<BookingViewModel>().selectMovie(movie);
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(builder: (context) => const ShowtimeScreen()),
+                                                  );
+                                                }
+                                              : null,
                                             style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(0xFFE51937),
+                                              backgroundColor: (movie.status == 'now_showing' || movie.status == 'showing') 
+                                                  ? const Color(0xFFE51937) 
+                                                  : Colors.grey,
+                                              disabledBackgroundColor: Colors.grey[400],
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                               padding: const EdgeInsets.symmetric(vertical: 12),
                                             ),
-                                            child: const Text('ĐẶT VÉ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                            child: Text(
+                                              (movie.status == 'now_showing' || movie.status == 'showing') ? 'ĐẶT VÉ' : 'SẮP CHIẾU', 
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                                            ),
                                           ),
                                         ),
                                       ],

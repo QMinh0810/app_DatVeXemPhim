@@ -45,17 +45,26 @@ class AuthViewModel extends ChangeNotifier {
 
     try {
       if (!_googleSignInInitialized) {
-        await GoogleSignIn.instance.initialize();
+        // Cần serverClientId (Web Client ID từ Google Console) để nhận được idToken
+        await GoogleSignIn.instance.initialize(
+          serverClientId: '356822372175-3l82628c5iefji9gu9llp04o0tfs9i7j.apps.googleusercontent.com',
+        );
         _googleSignInInitialized = true;
       }
 
-      final GoogleSignInAccount account = await GoogleSignIn.instance.authenticate(
+      final GoogleSignInAccount? account = await GoogleSignIn.instance.authenticate(
         scopeHint: ['email', 'profile', 'openid'],
       );
 
-      final GoogleSignInAuthentication auth = account.authentication;
+      if (account == null) {
+        _isLoading = false;
+        notifyListeners();
+        return; // Người dùng hủy đăng nhập
+      }
+
+      final GoogleSignInAuthentication auth = await account.authentication;
       if (auth.idToken == null) {
-        _errorMessage = 'Không lấy được Token từ Google';
+        _errorMessage = 'Không lấy được Token từ Google. Vui lòng kiểm tra cấu hình serverClientId.';
         _isLoading = false;
         notifyListeners();
         return;
@@ -79,7 +88,7 @@ class AuthViewModel extends ChangeNotifier {
         notifyListeners();
         return; // User canceled
       }
-      _errorMessage = 'Lỗi kết nối Google: ${e.code} - ${e.toString()}';
+      _errorMessage = 'Lỗi kết nối Google: ${e.code}';
     } catch (e) {
       _errorMessage = 'Lỗi không xác định: $e';
     }

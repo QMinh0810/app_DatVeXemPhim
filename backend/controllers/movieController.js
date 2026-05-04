@@ -54,7 +54,7 @@ exports.getHotMovies = async (req, res) => {
             LEFT JOIN phim_dienvien pdv ON p.maphim = pdv.maphim
             LEFT JOIN dienvien dv ON pdv.madienvien = dv.madienvien
             WHERE REPLACE(LOWER(h.tenhashtag), ' ', '') ILIKE $1 
-            AND p.trangthai = 'showing'
+            AND p.trangthai IN ('showing', 'now_showing')
             GROUP BY p.maphim
             LIMIT 5
         `;
