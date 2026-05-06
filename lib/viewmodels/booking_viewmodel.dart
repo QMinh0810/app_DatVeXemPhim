@@ -33,9 +33,9 @@ class SeatData {
   factory SeatData.fromJson(Map<String, dynamic> json) {
     return SeatData(
       maghe: json['maghe']?.toString() ?? '',
-      mahangghe: json['mahangghe']?.toString() ?? '',
+      mahangghe: json['mahangghe']?.toString().trim().toUpperCase() ?? '',
       soghe: int.tryParse(json['soghe']?.toString() ?? '0') ?? 0,
-      loaighe: json['loaighe']?.toString() ?? 'hỏng', // Mặc định là hỏng nếu không có
+      loaighe: json['loaighe']?.toString().trim().toLowerCase() ?? 'hỏng', 
       hesogiaghe: double.tryParse(json['hesogiaghe']?.toString() ?? '1') ?? 1.0,
       isBooked: json['isBooked'] == true,
     );
@@ -98,9 +98,9 @@ class BookingViewModel extends ChangeNotifier {
     }
   }
 
-  /// Lấy danh sách các hàng ghế cố định (12 hàng)
+  /// Lấy danh sách các hàng ghế cố định (11 hàng)
   List<String> get seatRows {
-    return ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
+    return ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'];
   }
 
   /// Lấy số cột cố định (8 cột)
@@ -113,7 +113,7 @@ class BookingViewModel extends ChangeNotifier {
     try {
       return _seatMap.firstWhere((s) => s.mahangghe == row && s.soghe == col);
     } catch (_) {
-      // Nếu không có trong DB thì tự động coi là ghế hỏng
+      // Nếu không có trong DB thì tự động coi là ghế hỏng để giữ khung sơ đồ đầy đủ
       return SeatData(
         maghe: '${row}_$col',
         mahangghe: row,
@@ -169,7 +169,19 @@ class BookingViewModel extends ChangeNotifier {
       final res = await ApiService.fetchSeats(_selectedShowtimeId!);
       if (res['status'] == 'success') {
         final List<dynamic> seatsList = res['data']['seats'];
+        final Map<String, dynamic> showtimeInfo = res['data']['showtime'] ?? {};
         
+        // Cập nhật thông tin rạp/phòng từ API (hỗ trợ nhiều định dạng key)
+        _selectedTheaterName = showtimeInfo['tenrapphim'] ?? 
+                               showtimeInfo['tenRapPhim'] ?? 
+                               showtimeInfo['TENRAPPHIM'] ?? 
+                               _selectedTheaterName;
+                               
+        _selectedRoomName = showtimeInfo['tenphong'] ?? 
+                             showtimeInfo['tenPhong'] ?? 
+                             showtimeInfo['TENPHONG'] ?? 
+                             _selectedRoomName;
+
         // Parse full seat data
         _seatMap = seatsList.map<SeatData>((seat) => SeatData.fromJson(seat)).toList();
         

@@ -63,7 +63,20 @@ exports.updateSeatType = async (req, res) => {
 exports.getSeatsByRoom = async (req, res) => {
     try {
         const { id } = req.params; // maPhong
+        
+        // 1. Lấy thông tin phòng và rạp
+        const roomInfoRes = await db.query(`
+            SELECT pr.*, r.tenrapphim 
+            FROM phongrapphim pr
+            JOIN rapphim r ON pr.marapphim = r.marapphim
+            WHERE pr.maphong = $1
+        `, [id]);
 
+        if (roomInfoRes.rows.length === 0) {
+            return res.status(404).json({ status: 'error', message: 'Không tìm thấy phòng chiếu' });
+        }
+
+        // 2. Lấy danh sách ghế
         const result = await db.query(
             'SELECT * FROM ghengoi WHERE maphong = $1 ORDER BY mahangghe, soghe',
             [id]
@@ -71,6 +84,7 @@ exports.getSeatsByRoom = async (req, res) => {
 
         res.json({
             status: 'success',
+            room: roomInfoRes.rows[0],
             total: result.rowCount,
             data: result.rows
         });

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/movie_model.dart';
 import '../viewmodels/booking_viewmodel.dart';
-import '../screens/showtime_screen.dart';
 import '../screens/movie_info_screen.dart';
 
 class MovieCard extends StatelessWidget {
@@ -110,13 +109,13 @@ class MovieCard extends StatelessWidget {
               onPressed: () {
                 if (movie != null) {
                   context.read<BookingViewModel>().selectMovie(movie!);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MovieInfoScreen(movie: movie!),
+                    ),
+                  );
                 }
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ShowtimeScreen(),
-                  ),
-                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE51937),

@@ -90,22 +90,40 @@ exports.login = async (req, res) => {
 
 exports.forgotPassword = async (req, res) => {
    try {
-       const { email } = req.body;
-       const userRes = await db.query('SELECT * FROM thongtintaikhoan WHERE email = $1', [email]);
-       if (userRes.rows.length === 0) {
-            return res.status(404).json({ status: 'error', message: 'Email này không tồn tại trong hệ thống' });
+       let { email } = req.body;
+       
+       if (!email) {
+           return res.status(400).json({ status: 'error', message: 'Vui lòng nhập địa chỉ email' });
        }
 
-       // 1. Sinh mã OTP ngẫu nhiên 6 chữ số
+       // Chuẩn hóa dữ liệu đầu vào
+       email = email.trim().toLowerCase();
+
+       // Kiểm tra định dạng email cơ bản
+       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+       if (!emailRegex.test(email)) {
+           return res.status(400).json({ status: 'error', message: 'Định dạng email không hợp lệ' });
+       }
+
+       // 1. Kiểm tra email có tồn tại trong hệ thống không
+       const userRes = await db.query('SELECT * FROM thongtintaikhoan WHERE email = $1', [email]);
+       if (userRes.rows.length === 0) {
+            return res.status(404).json({ 
+                status: 'error', 
+                message: 'Email này không tồn tại trong hệ thống. Vui lòng kiểm tra lại hoặc đăng ký tài khoản mới.' 
+            });
+       }
+
+       // 2. Chỉ sinh OTP và gửi email nếu tài khoản tồn tại
        const otp = Math.floor(100000 + Math.random() * 900000).toString();
        
-       // 2. Thiết lập thời gian hết hạn (5 phút)
+       // Thiết lập thời gian hết hạn (5 phút)
        const expiresAt = Date.now() + 5 * 60 * 1000;
 
-       // 3. Lưu vào bộ nhớ tạm
+       // Lưu vào bộ nhớ tạm
        otpStore.set(email, { otp, expiresAt });
 
-       // 4. Gửi Email thực tế
+       // 3. Gửi Email thực tế
        const emailSent = await emailService.sendOTPEmail(email, otp);
 
        res.json({ 
@@ -113,7 +131,7 @@ exports.forgotPassword = async (req, res) => {
            message: emailSent 
             ? `Chúng tôi đã gửi mã xác nhận vào email của bạn.` 
             : `Hệ thống không thể gửi email lúc này, vui lòng thử lại sau. (OTP Debug: ${otp})`,
-           debug_otp: otp, // Giữ để dễ test
+           debug_otp: otp, // Giữ lại để bạn dễ dàng test/debug
            expiresIn: '5 minutes'
        });
    } catch(e) {

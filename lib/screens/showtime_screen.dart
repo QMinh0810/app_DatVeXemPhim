@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import '../services/api_service.dart';
 import 'seat_selection_screen.dart';
@@ -13,15 +14,26 @@ class ShowtimeScreen extends StatefulWidget {
 
 class _ShowtimeScreenState extends State<ShowtimeScreen> {
   List<dynamic> _showtimes = [];
-  List<String> _theaters = [];
-  String? _selectedTheater;
   bool _isLoading = true;
   String? _errorMessage;
+  int _selectedDateIndex = 0; // 0 is "Tất cả", 1-9 are specific dates
+  
+  late List<DateTime> _dates;
 
   @override
   void initState() {
     super.initState();
+    _generateDates();
     _loadShowtimes();
+  }
+
+  void _generateDates() {
+    final now = DateTime.now();
+    // Logic: Bắt đầu từ Thứ 7 tuần trước, cập nhật sang tuần mới khi đến Chủ Nhật
+    // Công thức: startDate = now - ((weekday % 7) + 1)
+    // Ví dụ: CN (7%7=0) -> lùi 1 ngày = Thứ 7 hôm qua. T2 (1%7=1) -> lùi 2 ngày = Thứ 7 tuần trước.
+    final startSaturday = now.subtract(Duration(days: (now.weekday % 7) + 1));
+    _dates = List.generate(9, (index) => startSaturday.add(Duration(days: index)));
   }
 
   Future<void> _loadShowtimes() async {
@@ -36,17 +48,20 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
       return;
     }
 
+    setState(() => _isLoading = true);
+
     try {
-      final data = await ApiService.fetchShowtimes(movieId: movieId);
-      final theaterSet = <String>{};
-      for (final st in data) {
-        final name = st['tenraphim']?.toString();
-        if (name != null && name.isNotEmpty) theaterSet.add(name);
+      String? selectedDateStr;
+      if (_selectedDateIndex > 0) {
+        selectedDateStr = DateFormat('yyyy-MM-dd').format(_dates[_selectedDateIndex - 1]);
       }
+      
+      final data = await ApiService.fetchShowtimes(movieId: movieId, date: selectedDateStr);
+      
       setState(() {
         _showtimes = data;
-        _theaters = theaterSet.toList();
         _isLoading = false;
+        _errorMessage = null;
       });
     } catch (e) {
       setState(() {
@@ -56,206 +71,230 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
     }
   }
 
+  Map<String, List<dynamic>> _groupShowtimesByCinema() {
+    final Map<String, List<dynamic>> grouped = {};
+    for (var st in _showtimes) {
+      final cinemaName = st['tenrapphim'] ?? st['tenRapPhim'] ?? st['TENRAPPHIM'] ?? 'Rạp chưa rõ';
+      if (!grouped.containsKey(cinemaName)) {
+        grouped[cinemaName] = [];
+      }
+      grouped[cinemaName]!.add(st);
+    }
+    return grouped;
+  }
+
   @override
   Widget build(BuildContext context) {
     final bookingVM = context.watch<BookingViewModel>();
     final movie = bookingVM.selectedMovie;
+    final groupedCinemas = _groupShowtimesByCinema();
+    final now = DateTime.now();
+    final todayStr = DateFormat('yyyy-MM-dd').format(now);
+    final tomorrowStr = DateFormat('yyyy-MM-dd').format(now.add(const Duration(days: 1)));
 
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('Chọn Suất Chiếu', style: TextStyle(color: Colors.black)),
+        title: Text(movie?.title.toUpperCase() ?? 'CHỌN SUẤT CHIẾU', 
+          style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.black),
         elevation: 1,
       ),
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Thông tin phim
-          if (movie != null)
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: Colors.grey[100],
+          // Date Selector
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      movie.posterUrl,
-                      width: 60,
-                      height: 90,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 60, height: 90, color: Colors.grey[300],
-                        child: const Icon(Icons.movie),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(movie.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        const SizedBox(height: 4),
-                        Text('${movie.duration} phút', style: TextStyle(color: Colors.grey[600])),
-                      ],
-                    ),
-                  ),
+                  // Nút "Tất cả"
+                  _buildDateItem(0, 'Tất cả'),
+                  // Danh sách 9 ngày
+                  ...List.generate(_dates.length, (index) {
+                    final date = _dates[index];
+                    final dateFormatted = DateFormat('yyyy-MM-dd').format(date);
+                    
+                    String label;
+                    if (dateFormatted == todayStr) {
+                      label = 'Hôm nay\n${DateFormat('dd/MM').format(date)}';
+                    } else if (dateFormatted == tomorrowStr) {
+                      label = 'Ngày mai\n${DateFormat('dd/MM').format(date)}';
+                    } else {
+                      label = '${_getWeekdayLabel(date.weekday)}\n${DateFormat('dd/MM').format(date)}';
+                    }
+                    
+                    return _buildDateItem(index + 1, label);
+                  }),
                 ],
               ),
             ),
-
-          // Bộ lọc rạp
-          if (_theaters.isNotEmpty)
-            SizedBox(
-              height: 48,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: const Text('Tất cả'),
-                      selected: _selectedTheater == null,
-                      selectedColor: const Color(0xFFE51937),
-                      labelStyle: TextStyle(
-                        color: _selectedTheater == null ? Colors.white : Colors.black87,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      onSelected: (_) => setState(() => _selectedTheater = null),
-                    ),
-                  ),
-                  ..._theaters.map((theater) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(theater),
-                      selected: _selectedTheater == theater,
-                      selectedColor: const Color(0xFFE51937),
-                      labelStyle: TextStyle(
-                        color: _selectedTheater == theater ? Colors.white : Colors.black87,
-                      ),
-                      onSelected: (_) => setState(() => _selectedTheater = theater),
-                    ),
-                  )),
-                ],
-              ),
-            ),
-
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('LỊCH CHIẾU', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ),
-
-          // Danh sách suất chiếu
+          
+          const SizedBox(height: 8),
+          
+          // Showtimes List
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFFE51937)))
                 : _errorMessage != null
                     ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.grey)))
-                    : _showtimes.isEmpty
-                        ? const Center(child: Text('Chưa có suất chiếu cho phim này', style: TextStyle(color: Colors.grey, fontSize: 16)))
-                        : Builder(builder: (context) {
-                            final filtered = _selectedTheater == null
-                                ? _showtimes
-                                : _showtimes.where((st) => st['tenraphim'] == _selectedTheater).toList();
-                            if (filtered.isEmpty) {
-                              return const Center(child: Text('Không có suất chiếu cho rạp này', style: TextStyle(color: Colors.grey, fontSize: 16)));
-                            }
-                            return ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: filtered.length,
+                    : groupedCinemas.isEmpty
+                        ? const Center(child: Text('Không có suất chiếu cho lựa chọn này', style: TextStyle(color: Colors.grey, fontSize: 16)))
+                        : ListView.builder(
+                            itemCount: groupedCinemas.length,
                             itemBuilder: (context, index) {
-                              final st = filtered[index];
-                              final showtimeId = st['malichchieu'] ?? '';
-                              final theaterName = st['tenraphim'] ?? 'Rạp chưa rõ';
-                              final roomName = st['tenphong'] ?? '';
-                              final price = (st['giave'] ?? 0);
+                              final cinemaName = groupedCinemas.keys.elementAt(index);
+                              final showtimes = groupedCinemas[cinemaName]!;
                               
-                              // Parse giờ chiếu
-                              String timeDisplay = '';
-                              if (st['giochieu'] != null) {
-                                final dt = DateTime.tryParse(st['giochieu'].toString());
-                                if (dt != null) {
-                                  timeDisplay = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-                                }
-                              }
-                              String dateDisplay = '';
-                              if (st['ngaychieu'] != null) {
-                                final dt = DateTime.tryParse(st['ngaychieu'].toString());
-                                if (dt != null) {
-                                  dateDisplay = '${dt.day}/${dt.month}/${dt.year}';
-                                }
-                              }
-
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                elevation: 2,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(12),
-                                  onTap: () {
-                                    bookingVM.selectShowtime(
-                                      showtimeId,
-                                      price.toDouble(),
-                                      theaterName: theaterName,
-                                      roomName: roomName,
-                                      timeDisplay: timeDisplay,
-                                      dateDisplay: dateDisplay,
-                                    );
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const SeatSelectionScreen()),
-                                    );
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Row(
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                color: Colors.white,
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Cinema Header
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        // Khung giờ
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFE51937),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Column(
-                                            children: [
-                                              Text(timeDisplay, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                                              Text(dateDisplay, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                            ],
-                                          ),
-                                        ),
-                                        const SizedBox(width: 16),
-                                        // Thông tin rạp
                                         Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(theaterName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                              const SizedBox(height: 4),
-                                              Text(roomName, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                '${price.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} VNĐ',
-                                                style: const TextStyle(color: Color(0xFFE51937), fontWeight: FontWeight.bold),
-                                              ),
-                                            ],
+                                          child: Text(
+                                            cinemaName,
+                                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                           ),
                                         ),
-                                        const Icon(Icons.chevron_right, color: Colors.grey),
+                                        const Row(
+                                          children: [
+                                            Icon(Icons.location_on, size: 16, color: Colors.grey),
+                                            Text('Gần đây', style: TextStyle(color: Colors.grey)),
+                                          ],
+                                        )
                                       ],
                                     ),
-                                  ),
+                                    const SizedBox(height: 16),
+                                    
+                                    const Text(
+                                      '2D Phụ Đề Việt',
+                                      style: TextStyle(color: Colors.black54, fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
+                                      children: showtimes.map((st) {
+                                        final showtimeId = st['malichchieu'] ?? '';
+                                        final roomName = st['tenphong'] ?? st['tenPhong'] ?? st['TENPHONG'] ?? 'Phòng chưa rõ';
+                                        final price = (st['giave'] ?? 0);
+                                        
+                                        // Parse giờ chiếu
+                                        String timeDisplay = '';
+                                        String dateLabel = '';
+                                        if (st['giochieu'] != null) {
+                                          final dt = DateTime.tryParse(st['giochieu'].toString());
+                                          if (dt != null) {
+                                            timeDisplay = DateFormat('HH:mm').format(dt);
+                                            dateLabel = DateFormat('dd/MM').format(dt);
+                                          }
+                                        }
+
+                                        return InkWell(
+                                          onTap: () {
+                                            bookingVM.selectShowtime(
+                                              showtimeId,
+                                              price.toDouble(),
+                                              theaterName: cinemaName,
+                                              roomName: roomName,
+                                              timeDisplay: timeDisplay,
+                                              dateDisplay: dateLabel,
+                                            );
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (_) => const SeatSelectionScreen()),
+                                            );
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              border: Border.all(color: Colors.grey[300]!),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Column(
+                                              children: [
+                                                Text(
+                                                  timeDisplay,
+                                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                                ),
+                                                // Hiển thị thêm ngày nếu đang ở chế độ "Tất cả"
+                                                if (_selectedDateIndex == 0)
+                                                  Text(dateLabel, style: const TextStyle(fontSize: 10, color: Colors.black45)),
+                                                Text(
+                                                  '${(price/1000).toStringAsFixed(0)}K',
+                                                  style: const TextStyle(fontSize: 10, color: Color(0xFFE51937)),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 8),
+                                  ],
                                 ),
                               );
                             },
-                          );
-                          }),
-          ),
+                          ),
+          )
         ],
       ),
     );
+  }
+
+  Widget _buildDateItem(int index, String label) {
+    bool isSelected = _selectedDateIndex == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedDateIndex = index;
+        });
+        _loadShowtimes();
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFE51937) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFE51937) : Colors.grey[300]!,
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black87,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getWeekdayLabel(int weekday) {
+    switch (weekday) {
+      case 1: return 'T2';
+      case 2: return 'T3';
+      case 3: return 'T4';
+      case 4: return 'T5';
+      case 5: return 'T6';
+      case 6: return 'T7';
+      case 7: return 'CN';
+      default: return '';
+    }
   }
 }

@@ -235,4 +235,44 @@ class ApiService {
     }
     return responseData;
   }
+
+  // ==================== NOTIFICATIONS ====================
+
+  /// Lấy danh sách thông báo của người dùng
+  static Future<List<dynamic>> fetchNotifications() async {
+    final res = await http.get(Uri.parse('$baseUrl/notifications'), headers: _headers);
+    final body = jsonDecode(res.body);
+    return body['data'] ?? [];
+  }
+
+  /// Lấy số lượng thông báo chưa đọc
+  static Future<int> getUnreadCount() async {
+    final res = await http.get(Uri.parse('$baseUrl/notifications/unread-count'), headers: _headers);
+    final body = jsonDecode(res.body);
+    return body['data']?['unreadCount'] ?? 0;
+  }
+
+  /// Đánh dấu một thông báo là đã đọc
+  static Future<Map<String, dynamic>> markNotificationAsRead(String id) async {
+    final res = await http.put(Uri.parse('$baseUrl/notifications/$id/read'), headers: _headers);
+    return jsonDecode(res.body);
+  }
+
+  /// Đánh dấu tất cả thông báo là đã đọc
+  static Future<Map<String, dynamic>> markAllNotificationsAsRead() async {
+    final res = await http.put(Uri.parse('$baseUrl/notifications/read-all'), headers: _headers);
+    return jsonDecode(res.body);
+  }
+
+  /// Xóa một thông báo cụ thể
+  static Future<Map<String, dynamic>> deleteNotification(String id) async {
+    final res = await http.delete(Uri.parse('$baseUrl/notifications/$id'), headers: _headers);
+    return jsonDecode(res.body);
+  }
+
+  /// Xóa tất cả thông báo
+  static Future<Map<String, dynamic>> deleteAllNotifications() async {
+    final res = await http.delete(Uri.parse('$baseUrl/notifications/all'), headers: _headers);
+    return jsonDecode(res.body);
+  }
 }
