@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const emailService = require('../utils/emailService');
+const { createNotification } = require('../utils/notificationHelper');
 
 // Lấy danh sách Rạp phim
 exports.getTheaters = async (req, res) => {
@@ -17,8 +18,15 @@ exports.getTheaterRoomsAndSeats = async (req, res) => {
     try {
         const { showtimeId } = req.params;
         
-        // 1. Lấy thông tin Lịch chiếu -> Lấy được mã Phòng
-        const showtimeRes = await db.query('SELECT * FROM lichchieu WHERE malichchieu = $1', [showtimeId]);
+        // 1. Lấy thông tin Lịch chiếu -> JOIN để lấy Tên Phòng và Tên Rạp
+        const showtimeQuery = `
+            SELECT lc.*, pr.tenphong, r.tenrapphim, r.diachi
+            FROM lichchieu lc
+            JOIN phongrapphim pr ON lc.maphong = pr.maphong
+            JOIN rapphim r ON pr.marapphim = r.marapphim
+            WHERE lc.malichchieu = $1
+        `;
+        const showtimeRes = await db.query(showtimeQuery, [showtimeId]);
         if (showtimeRes.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Không tìm thấy suất chiếu' });
         
         const showtime = showtimeRes.rows[0];
@@ -239,6 +247,26 @@ exports.createBooking = async (req, res) => {
         // Hoàn tất lưu dữ liệu
         await client.query('COMMIT');
 
+        // Tạo thông báo: Đặt vé thành công (giữ chỗ)
+        const showtimeInfoRes = await db.query(`
+            SELECT lc.maphim, p.tenphim, r.tenrapphim
+            FROM lichchieu lc
+            JOIN phim p ON lc.maphim = p.maphim
+            JOIN phongrapphim pr ON lc.maphong = pr.maphong
+            JOIN rapphim r ON pr.marapphim = r.marapphim
+            WHERE lc.malichchieu = $1
+        `, [showtimeId]);
+        if (showtimeInfoRes.rows.length > 0) {
+            const { maphim, tenphim, tenrapphim } = showtimeInfoRes.rows[0];
+            await createNotification({
+                userId,
+                tieuDe: 'Đặt vé thành công! 🎬',
+                noiDung: `Bạn đã giữ ${seatIds.length} ghế cho phim "${tenphim}" tại ${tenrapphim}. Mã đơn: ${maDonDatVe}. Vui lòng thanh toán trong 10 phút.`,
+                maDonDatVe,
+                maPhim: maphim
+            });
+        }
+
         res.status(201).json({ 
             status: 'success', 
             message: 'Giữ ghế thành công! Vui lòng hoàn tất thanh toán trong 10 phút.', 
@@ -312,7 +340,36 @@ exports.confirmPayment = async (req, res) => {
 
         await client.query('COMMIT');
 
-        // 3. Gửi Email thông báo (Chạy async sau khi đã commit thành công)
+        // Tạo thông báo: Thanh toán và xác nhận vé thành công
+        (async () => {
+            try {
+                const notifInfoRes = await db.query(`
+                    SELECT lc.maphim, p.tenphim, r.tenrapphim
+                    FROM dondatve d
+                    JOIN vexemphim v ON d.madondatve = v.madondatve
+                    JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
+                    JOIN phim p ON lc.maphim = p.maphim
+                    JOIN phongrapphim pr ON lc.maphong = pr.maphong
+                    JOIN rapphim r ON pr.marapphim = r.marapphim
+                    WHERE d.madondatve = $1
+                    LIMIT 1
+                `, [maDonDatVe]);
+                if (notifInfoRes.rows.length > 0) {
+                    const { maphim, tenphim, tenrapphim } = notifInfoRes.rows[0];
+                    await createNotification({
+                        userId: req.user.id,
+                        tieuDe: 'Thanh toán thành công! 🎉',
+                        noiDung: `Vé phim "${tenphim}" tại ${tenrapphim} đã được xác nhận. Mã đơn: ${maDonDatVe}. Chúc bạn xem phim vui vẻ!`,
+                        maDonDatVe,
+                        maPhim: maphim
+                    });
+                }
+            } catch (err) {
+                console.error('Lỗi tạo thông báo thanh toán (non-critical):', err.message);
+            }
+        })();
+
+        // Gửi Email thông báo (Chạy async sau khi đã commit thành công)
         (async () => {
             try {
                 const bookingDetailsQuery = `

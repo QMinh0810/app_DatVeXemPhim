@@ -1,4 +1,6 @@
 const db = require('../../config/db');
+const { createNotification } = require('../../utils/notificationHelper');
+const emailService = require('../../utils/emailService');
 
 /**
  * Xem danh sách đơn đặt vé (kèm thông tin chi tiết: Mã Vé, tên khách hàng, Phim, Ghế, ngày chiếu, tổng tiền, trạng thái)
@@ -181,12 +183,77 @@ exports.updatePaymentStatus = async (req, res) => {
         );
 
         // Nếu thanh toán thành công -> cập nhật đơn đặt vé sang 'paid'
-        // Nếu thanh toán thất bại -> cập nhật đơn đặt vé sang 'cancelled'
+        // Nếu thanh toán thất bại -> cập nhật đơn đặt vé sang 'cancelled' và gửi thông báo
         const maDonDatVe = result.rows[0].madondatve;
         if (trangthai === 'success') {
             await db.query("UPDATE dondatve SET trangthai = 'paid' WHERE madondatve = $1", [maDonDatVe]);
         } else if (trangthai === 'failed') {
             await db.query("UPDATE dondatve SET trangthai = 'cancelled' WHERE madondatve = $1", [maDonDatVe]);
+
+            // Gửi thông báo in-app + email bất đồng bộ (không block response)
+            (async () => {
+                try {
+                    // Lấy thông tin đầy đủ để gửi thông báo và email
+                    const cancelInfoRes = await db.query(`
+                        SELECT 
+                            d.id_khach,
+                            d.tongtien,
+                            t.email,
+                            t.hoten,
+                            p.maphim,
+                            p.tenphim,
+                            r.tenrapphim,
+                            pr.tenphong,
+                            lc.ngaychieu,
+                            lc.giochieu
+                        FROM dondatve d
+                        JOIN thongtintaikhoan t ON d.id_khach = t.id_khach
+                        JOIN vexemphim v ON d.madondatve = v.madondatve
+                        JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
+                        JOIN phim p ON lc.maphim = p.maphim
+                        JOIN phongrapphim pr ON lc.maphong = pr.maphong
+                        JOIN rapphim r ON pr.marapphim = r.marapphim
+                        WHERE d.madondatve = $1
+                        LIMIT 1
+                    `, [maDonDatVe]);
+
+                    if (cancelInfoRes.rows.length > 0) {
+                        const info = cancelInfoRes.rows[0];
+                        const tongTienFormat = Number(info.tongtien).toLocaleString('vi-VN');
+
+                        // 1. Thông báo in-app
+                        await createNotification({
+                            userId: info.id_khach,
+                            tieuDe: 'Đơn hàng đã bị huỷ bởi hệ thống 🚫',
+                            noiDung: `Đơn hàng ${maDonDatVe} tại ${info.tenrapphim} đã bị huỷ. Số tiền hoàn lại: ${tongTienFormat} VNĐ sẽ được xử lý trong 3-5 ngày làm việc.`,
+                            maDonDatVe,
+                            maPhim: info.maphim
+                        });
+
+                        // 2. Gửi Email thông báo huỷ
+                        if (info.email) {
+                            const gioChieuStr = info.giochieu instanceof Date
+                                ? info.giochieu.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                                : String(info.giochieu);
+                            const ngayChieuStr = info.ngaychieu instanceof Date
+                                ? info.ngaychieu.toLocaleDateString('vi-VN')
+                                : String(info.ngaychieu);
+
+                            await emailService.sendBookingCancelledEmail(info.email, {
+                                maDonDatVe,
+                                tenPhim: info.tenphim,
+                                tongTien: info.tongtien,
+                                tenRapPhim: info.tenrapphim,
+                                tenPhong: info.tenphong,
+                                ngayChieu: ngayChieuStr,
+                                gioChieu: gioChieuStr
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.error('Lỗi gửi thông báo huỷ đơn (non-critical):', err.message);
+                }
+            })();
         } else if (trangthai === 'pending') {
             await db.query("UPDATE dondatve SET trangthai = 'pending' WHERE madondatve = $1", [maDonDatVe]);
         }

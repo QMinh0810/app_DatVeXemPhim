@@ -1,9 +1,4 @@
-- [x] UI Trang chủ bỏ phần mã tài khoản trên thông tin đăng nhập
-- [x] kiểm tra lại xem Trang chủ chưa hiển thị phim có hashtag #phimhot (Fixed typo in status)
-- [x] UI movie_list_screen.dart Thêm chức năng phần tìm kiếm phim và lọc phim theo thể loại
-- [x] UI account_info_screen.dart Thông tin tài khoản dư phần Mã tài khoản ( bỏ đi)
-- [x] UI account_info_screen.dart Tài khoản hiện tại không cho thay đổi sdt và email
-- [x] UI showtime_screen.dart Cập nhật thông tin rạp vào trong phần chọn lịch chiếu, UI nên có thêm bộ lọc theo rạp 
-- [x] thiết kế UI đổi mật khẩu giống ảnh ChangPasswordScreen.jpg
-- [x] thiêt kế UI thông tin phim giống ảnh MovieInfo.jpg
-- [x] thiết kế lại UI seat_selection_screen.dart các ghế hỏng ... màu xám
+1. sửa lại UI seat_selection_screen.dart trong phần chọn ghế, lấy lai UI cũ, thêm phần lối đi ở giữa và và nối các ghế trong hàng có ghế đôi
+2. trong UI forgot_password_screen.dart
+- thêm 1 ô cho phép nhập mã otp, ô này nhỏ hơn ô nhập email, bên trái ô nhập otp có 1 nút 'Gửi mã OTP', gán API forgot_password  cho nút 'Gửi mã OTP'
+- thêm nút xác nhận OTP, điền API xác nhận quên mật khẩu /auth/reset-password nhưng gửi mật khẩu là 1 ký tự '9' là được, nếu OTP sai thì thông báo, nếu đúng thì chuyển sang trang đổi mật khẩu với tokken ID của tài khoản email đó (lên kế hoạch chi tiết cho phần này) 

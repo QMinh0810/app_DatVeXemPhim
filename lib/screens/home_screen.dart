@@ -5,6 +5,8 @@ import '../widgets/promo_slider.dart';
 import '../widgets/feature_grid.dart';
 import '../widgets/movie_list.dart';
 import '../widgets/custom_app_bar.dart';
+import '../widgets/horizontal_image_list.dart';
+
 import 'dummy_screen.dart';
 import 'movie_list_screen.dart';
 import 'profile_screen.dart';
@@ -35,6 +37,15 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(height: 16),
               MovieList(),
               SizedBox(height: 24),
+              HorizontalImageList(
+                title: 'Tin mới & Ưu đãi',
+                imageUrls: [
+                  'https://image.tmdb.org/t/p/w500/8Y43POKjjKDGI9MH89NW0NAzzp8.jpg',
+                  'https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2TGbiROox.jpg',
+                  'https://upload.wikimedia.org/wikipedia/vi/a/a8/Mai_2024_poster.jpg',
+                ],
+              ),
+              SizedBox(height: 32),
             ],
           ),
         ),

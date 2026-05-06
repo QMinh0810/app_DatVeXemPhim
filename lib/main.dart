@@ -4,8 +4,9 @@ import 'screens/login_screen.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/movie_viewmodel.dart';
 import 'viewmodels/booking_viewmodel.dart';
-import 'screens/account_info_screen.dart';
+import 'viewmodels/notification_viewmodel.dart';
 import 'screens/home_screen.dart';
+
 
 void main() {
   runApp(
@@ -14,6 +15,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(create: (_) => MovieViewModel()),
         ChangeNotifierProvider(create: (_) => BookingViewModel()),
+        ChangeNotifierProvider(create: (_) => NotificationViewModel()),
       ],
       child: const MyApp(),
     ),

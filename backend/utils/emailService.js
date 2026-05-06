@@ -106,7 +106,54 @@ const sendBookingSuccessEmail = async (to, bookingDetails) => {
     return sendEmail(to, `Xác nhận đặt vé thành công - #${maDonDatVe}`, html);
 };
 
+/**
+ * Gửi Email thông báo đơn hàng bị huỷ bởi Admin
+ */
+const sendBookingCancelledEmail = async (to, cancelDetails) => {
+    const {
+        maDonDatVe,
+        tenPhim,
+        tongTien,
+        tenRapPhim,
+        tenPhong,
+        ngayChieu,
+        gioChieu,
+    } = cancelDetails;
+
+    const tongTienFormat = Number(tongTien).toLocaleString('vi-VN');
+
+    const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 10px; overflow: hidden;">
+        <div style="background-color: #616161; color: white; padding: 20px; text-align: center;">
+            <h1>ĐƠN HÀNG ĐÃ BỊ HUỶ</h1>
+        </div>
+        <div style="padding: 24px; color: #333;">
+            <p>Xin chào,</p>
+            <p>Rất tiếc, đơn hàng của bạn tại <b>Nhóm 7 Cinema</b> đã bị huỷ bởi hệ thống. Dưới đây là thông tin chi tiết:</p>
+
+            <div style="background-color: #fafafa; padding: 16px; border-radius: 8px; margin-bottom: 24px; border-left: 4px solid #E51937;">
+                <h3 style="color: #333; margin-top: 0;">${tenPhim}</h3>
+                <p><b>Mã đơn hàng:</b> ${maDonDatVe}</p>
+                <p><b>Rạp:</b> ${tenRapPhim}</p>
+                <p><b>Phòng:</b> ${tenPhong}</p>
+                <p><b>Suất chiếu:</b> ${gioChieu} - ${ngayChieu}</p>
+                <p style="font-size: 16px;"><b>Số tiền hoàn lại:</b> <span style="color: #2e7d32; font-weight: bold;">${tongTienFormat} VNĐ</span></p>
+            </div>
+
+            <div style="text-align: center; background-color: #fff8e1; padding: 16px; border: 1px dashed #f9a825; border-radius: 8px;">
+                <p style="margin: 0;">Số tiền hoàn lại sẽ được xử lý trong vòng <b>3-5 ngày làm việc</b> tùy theo phương thức thanh toán của bạn.</p>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+            <p style="font-size: 12px; color: #888; text-align: center;">Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ bộ phận hỗ trợ.<br>Đội ngũ Nhóm 7 Cinema.</p>
+        </div>
+    </div>
+    `;
+    return sendEmail(to, `Thông báo huỷ đơn hàng #${maDonDatVe} - Nhóm 7 Cinema`, html);
+};
+
 module.exports = {
     sendOTPEmail,
-    sendBookingSuccessEmail
+    sendBookingSuccessEmail,
+    sendBookingCancelledEmail
 };
