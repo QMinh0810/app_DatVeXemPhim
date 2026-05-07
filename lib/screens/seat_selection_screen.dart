@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import 'payment_screen.dart'; 
 import 'package:intl/intl.dart';
+import 'dart:async';
 
 class SeatSelectionScreen extends StatefulWidget {
   const SeatSelectionScreen({super.key});
@@ -12,12 +13,27 @@ class SeatSelectionScreen extends StatefulWidget {
 }
 
 class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
+  Timer? _refreshTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<BookingViewModel>().fetchSeatMap();
     });
+    
+    // Thiết lập tự động làm mới mỗi 10 giây
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (mounted) {
+        context.read<BookingViewModel>().fetchSeatMap(silent: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   // ============= Định nghĩa màu ghế =============

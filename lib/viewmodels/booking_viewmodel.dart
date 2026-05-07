@@ -159,11 +159,13 @@ class BookingViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> fetchSeatMap() async {
+  Future<void> fetchSeatMap({bool silent = false}) async {
     if (_selectedShowtimeId == null) return;
     
-    _isLoading = true;
-    notifyListeners();
+    if (!silent) {
+      _isLoading = true;
+      notifyListeners();
+    }
     
     try {
       final res = await ApiService.fetchSeats(_selectedShowtimeId!);
@@ -190,12 +192,17 @@ class BookingViewModel extends ChangeNotifier {
             .where((seat) => seat.isBooked)
             .map<String>((seat) => seat.maghe)
             .toList();
+
+        // Xóa các ghế vừa bị người khác đặt khỏi danh sách đang chọn của mình
+        _selectedSeats.removeWhere((seatId) => _bookedSeats.contains(seatId));
       }
     } catch (e) {
-      _errorMessage = 'Không thể tải sơ đồ ghế';
+      if (!silent) _errorMessage = 'Không thể tải sơ đồ ghế';
     }
     
-    _isLoading = false;
+    if (!silent) {
+      _isLoading = false;
+    }
     notifyListeners();
   }
 

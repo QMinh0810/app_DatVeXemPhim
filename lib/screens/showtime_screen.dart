@@ -58,8 +58,17 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
       
       final data = await ApiService.fetchShowtimes(movieId: movieId, date: selectedDateStr);
       
+      // Lọc bỏ lịch chiếu quá khứ (không hiển thị suất chiếu đã qua)
+      final now = DateTime.now();
+      final filteredData = (data as List).where((st) {
+        if (st['giochieu'] == null) return false;
+        final dt = DateTime.tryParse(st['giochieu'].toString());
+        if (dt == null) return false;
+        return dt.isAfter(now);
+      }).toList();
+
       setState(() {
-        _showtimes = data;
+        _showtimes = filteredData;
         _isLoading = false;
         _errorMessage = null;
       });
@@ -121,8 +130,6 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
                     String label;
                     if (dateFormatted == todayStr) {
                       label = 'Hôm nay\n${DateFormat('dd/MM').format(date)}';
-                    } else if (dateFormatted == tomorrowStr) {
-                      label = 'Ngày mai\n${DateFormat('dd/MM').format(date)}';
                     } else {
                       label = '${_getWeekdayLabel(date.weekday)}\n${DateFormat('dd/MM').format(date)}';
                     }
