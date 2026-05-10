@@ -37,15 +37,15 @@ app.put('/api/admin/update-poster/:id', (req, res) => {
   return movieAdminController.updateMoviePoster(req, res);
 });
 
-// Middleware bắt lỗi 404 để debug
-app.use((req, res, next) => {
-  console.log(`[404] ${req.method} ${req.url} - Không tìm thấy route này!`);
-  res.status(404).send(`Cannot ${req.method} ${req.url}`);
-});
-
 // API: Kiểm tra Health
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is running on port ' + PORT });
+});
+
+// Middleware bắt lỗi 404 để debug (Đã dời xuống cuối để không chặn các API trên)
+app.use((req, res, next) => {
+  console.log(`[404] ${req.method} ${req.url} - Không tìm thấy route này!`);
+  res.status(404).send(`Cannot ${req.method} ${req.url}`);
 });
 
 // API: Test Kết Nối Database

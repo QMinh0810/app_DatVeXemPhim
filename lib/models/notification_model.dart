@@ -30,7 +30,9 @@ class NotificationModel {
       tieuDe: json['tieuDe']?.toString() ?? '',
       noiDung: json['noiDung']?.toString() ?? '',
       trangThai: json['trangThai']?.toString() ?? 'unread',
-      thoiDiemTB: DateTime.tryParse(json['thoiDiemTB']?.toString() ?? '') ?? DateTime.now(),
+      thoiDiemTB: (DateTime.tryParse(json['thoiDiemTB']?.toString() ?? '') ?? DateTime.now())
+          .toLocal()
+          .add(const Duration(hours: 7)), // Fix cho lỗi lệch múi giờ 7 tiếng từ Backend
       maDonDatVe: json['maDonDatVe']?.toString(),
       maPhim: phim?['maPhim']?.toString(),
       tenPhim: phim?['tenPhim']?.toString(),

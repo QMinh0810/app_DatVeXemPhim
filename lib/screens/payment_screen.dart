@@ -72,6 +72,17 @@ class PaymentScreen extends StatelessWidget {
                       Text('Phòng: ${bookingVM.selectedRoomName ?? "Chưa rõ"}'),
                       Text('Suất chiếu: ${bookingVM.selectedTimeDisplay ?? "--:--"} - ${bookingVM.selectedDateDisplay ?? "--/--/----"}'),
                       Text('Ghế: ${seats.map((id) => bookingVM.getSeatData(id)?.displayName ?? id).join(", ")}'),
+                      if (bookingVM.selectedCombos.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        const Text('Bắp nước:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        ...bookingVM.selectedCombos.entries.map((e) {
+                          final combo = bookingVM.availableCombos.firstWhere((c) => c.comboId == e.key);
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                            child: Text('- ${combo.name} x${e.value}'),
+                          );
+                        }).toList(),
+                      ],
                       const Divider(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

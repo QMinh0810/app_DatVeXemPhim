@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/booking_viewmodel.dart';
-import 'payment_screen.dart'; 
+import 'combo_selection_screen.dart'; 
 import 'package:intl/intl.dart';
 import 'dart:async';
 
@@ -143,9 +143,16 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
               // Sơ đồ ghế
               Expanded(
                 child: InteractiveViewer(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Column(
+                  minScale: 0.8,
+                  maxScale: 2.5,
+                  child: SingleChildScrollView(
+                    // [BUG FIX] Sửa lỗi giao diện: Thêm SingleChildScrollView
+                    // Lý do: Trên các màn hình nhỏ (hoặc số lượng hàng ghế G, H, I.. nhiều),
+                    // kích thước dọc của lưới ghế lớn hơn vùng Expanded dẫn đến lỗi "BOTTOM OVERFLOWED".
+                    // SingleChildScrollView giúp nội dung ghế có thể linh động cuộn dọc (scroll) thay vì bị tràn viền.
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Column(
                       children: rows.map((rowName) {
                         // Kiểm tra xem hàng này có phải hàng ghế đôi không dựa trên dữ liệu thực tế
                         bool isCoupleRow = false;
@@ -210,6 +217,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                   ),
                 ),
               ),
+            ),
 
               _buildLegend(),
             ],
@@ -282,7 +290,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
             const SizedBox(width: 16),
             ElevatedButton(
               onPressed: bookingVM.selectedSeats.isEmpty ? null : () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const PaymentScreen()));
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const ComboSelectionScreen()));
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFE51937),

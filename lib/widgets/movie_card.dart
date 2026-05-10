@@ -102,33 +102,7 @@ class MovieCard extends StatelessWidget {
               ),
             ],
           ),
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                if (movie != null) {
-                  context.read<BookingViewModel>().selectMovie(movie!);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => MovieInfoScreen(movie: movie!),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE51937),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                'ĐẶT VÉ',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
+          const SizedBox(height: 8),
         ],
       ),
     );

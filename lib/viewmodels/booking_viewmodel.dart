@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/booking_model.dart';
 import '../models/movie_model.dart';
 import '../services/api_service.dart';
+import '../models/combo_model.dart';
 
 /// Model đại diện cho 1 ghế ngồi từ API
 class SeatData {
@@ -57,7 +58,11 @@ class BookingViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _bookingResult; // Mã đơn hàng sau khi đặt thành công
-
+  
+  // Combos
+  List<ComboData> _availableCombos = [];
+  Map<int, int> _selectedCombos = {}; // comboId -> quantity
+  
   MovieModel? get selectedMovie => _selectedMovie;
   List<String> get selectedSeats => _selectedSeats;
   List<String> get bookedSeats => _bookedSeats;
@@ -72,8 +77,10 @@ class BookingViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get bookingResult => _bookingResult;
+  List<ComboData> get availableCombos => _availableCombos;
+  Map<int, int> get selectedCombos => _selectedCombos;
 
-  /// Tính tổng tiền vé dựa trên hệ số giá của từng ghế
+  /// Tính tổng tiền vé và combo
   double get totalPrice {
     double total = 0;
     for (final seatName in _selectedSeats) {
@@ -86,6 +93,13 @@ class BookingViewModel extends ChangeNotifier {
       );
       total += _seatPrice * seatData.hesogiaghe;
     }
+    
+    // Add combo prices
+    _selectedCombos.forEach((comboId, quantity) {
+      final combo = _availableCombos.firstWhere((c) => c.comboId == comboId, orElse: () => ComboData(comboId: 0, name: '', description: '', price: 0, imageUrl: ''));
+      total += combo.price * quantity;
+    });
+    
     return total;
   }
 
@@ -159,6 +173,56 @@ class BookingViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Combo Selection Methods
+  void addCombo(int comboId) {
+    _selectedCombos[comboId] = (_selectedCombos[comboId] ?? 0) + 1;
+    notifyListeners();
+  }
+
+  void removeCombo(int comboId) {
+    if (_selectedCombos.containsKey(comboId) && _selectedCombos[comboId]! > 0) {
+      _selectedCombos[comboId] = _selectedCombos[comboId]! - 1;
+      if (_selectedCombos[comboId] == 0) {
+        _selectedCombos.remove(comboId);
+      }
+      notifyListeners();
+    }
+  }
+
+  int getComboQuantity(int comboId) {
+    return _selectedCombos[comboId] ?? 0;
+  }
+
+  Future<void> fetchCombos() async {
+    try {
+      final res = await ApiService.fetchCombos();
+      _availableCombos = res.map<ComboData>((json) => ComboData.fromJson(json)).toList();
+    } catch (e) {
+      print('Failed to fetch combos: $e');
+    }
+    
+    // Dummy combo để test nếu rỗng
+    if (_availableCombos.isEmpty) {
+      _availableCombos = [
+        ComboData(
+          comboId: 999,
+          name: 'Combo Khổng Lồ',
+          description: '1 Bắp vị tự chọn lớn + 2 ly Nước ngọt khổng lồ',
+          price: 109000,
+          imageUrl: 'https://bhdstar.vn/wp-content/uploads/2023/08/BHD-Star-Combo-2.png',
+        ),
+        ComboData(
+          comboId: 1000,
+          name: 'Combo Cặp Đôi',
+          description: '1 Bắp phô mai lớn + 2 ly Nước ngọt vừa',
+          price: 89000,
+          imageUrl: 'https://bhdstar.vn/wp-content/uploads/2023/08/BHD-Star-Combo-1.png',
+        )
+      ];
+    }
+    notifyListeners();
+  }
+
   Future<void> fetchSeatMap({bool silent = false}) async {
     if (_selectedShowtimeId == null) return;
     
@@ -224,10 +288,18 @@ class BookingViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      List<Map<String, dynamic>> concessions = _selectedCombos.entries.map((e) {
+        return {
+          'comboId': e.key,
+          'quantity': e.value,
+        };
+      }).toList();
+
       final response = await ApiService.createBooking(
         showtimeId: _selectedShowtimeId!,
         seatIds: _selectedSeats,
         paymentMethod: _paymentMethod,
+        concessions: concessions.isNotEmpty ? concessions : null,
       );
 
       _isLoading = false;
@@ -274,6 +346,7 @@ class BookingViewModel extends ChangeNotifier {
     _selectedDateDisplay = null;
     _bookingResult = null;
     _errorMessage = null;
+    _selectedCombos.clear();
     notifyListeners();
   }
 }

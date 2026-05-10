@@ -1,9 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 class ApiService {
-  // Android Emulator dùng 10.0.2.2 thay cho localhost
-  static const String baseUrl = 'http://10.0.2.2:3000/api';
+  // Tự động nhận diện môi trường: Web dùng localhost, máy ảo Android dùng 10.0.2.2
+  static String get baseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:3000/api';
+    }
+    return 'http://10.0.2.2:3000/api';
+  }
 
   // Lưu trữ JWT Token sau khi đăng nhập
   static String? _token;
@@ -140,6 +146,7 @@ class ApiService {
     required String showtimeId,
     required List<String> seatIds,
     String paymentMethod = 'momo',
+    List<Map<String, dynamic>>? concessions,
   }) async {
     final res = await http.post(
       Uri.parse('$baseUrl/bookings/book'),
@@ -148,9 +155,19 @@ class ApiService {
         'showtimeId': showtimeId,
         'seatIds': seatIds,
         'paymentMethod': paymentMethod,
+        if (concessions != null) 'concessions': concessions,
       }),
     );
     return jsonDecode(res.body);
+  }
+
+  // ==================== CONCESSIONS ====================
+
+  /// Lấy danh sách Combo
+  static Future<List<dynamic>> fetchCombos() async {
+    final res = await http.get(Uri.parse('$baseUrl/concessions/combos'), headers: _headers);
+    final body = jsonDecode(res.body);
+    return body['data'] ?? [];
   }
 
   // ==================== REVIEWS ====================
