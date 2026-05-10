@@ -192,6 +192,7 @@ Create table [DienVien] (
 	[tenDienVien] Nvarchar(100) NOT NULL,
 	[ngaySinh] Datetime NULL,
 	[quocTich] Nvarchar(100) NULL,
+	[urlAnhDaiDien] Varchar(500) NULL,
 Primary Key  ([maDienVien])
 ) 
 go
@@ -208,6 +209,7 @@ Create table [DaoDien] (
 	[tenDaoDien] Nvarchar(100) NOT NULL,
 	[ngaySinh] Datetime NULL,
 	[quocTich] Nvarchar(100) NULL,
+	[urlAnhDaiDien] Varchar(500) NULL,
 Primary Key  ([maDaoDien])
 ) 
 go

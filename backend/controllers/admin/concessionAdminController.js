@@ -23,7 +23,7 @@ exports.getAllItems = async (req, res) => {
  */
 exports.createItem = async (req, res) => {
     try {
-        const { name, item_type, price, image_url, stock_quantity } = req.body;
+        const { name, item_type, price, image_url, stock_quantity, unit } = req.body;
 
         if (!name || !item_type || !price) {
             return res.status(400).json({ status: 'error', message: 'Vui lòng nhập name, item_type và price' });
@@ -34,8 +34,8 @@ exports.createItem = async (req, res) => {
         }
 
         const result = await db.query(
-            'INSERT INTO items (name, item_type, price, image_url, stock_quantity) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-            [name, item_type, price, image_url || null, stock_quantity || 0]
+            'INSERT INTO items (name, item_type, price, image_url, stock_quantity, unit) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+            [name, item_type, price, image_url || null, stock_quantity || 0, unit || null]
         );
 
         res.status(201).json({ status: 'success', message: 'Thêm sản phẩm thành công', data: result.rows[0] });
@@ -52,7 +52,7 @@ exports.createItem = async (req, res) => {
 exports.updateItem = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, item_type, price, image_url, stock_quantity, is_available } = req.body;
+        const { name, item_type, price, image_url, stock_quantity, is_available, unit } = req.body;
 
         const result = await db.query(`
             UPDATE items SET
@@ -61,9 +61,10 @@ exports.updateItem = async (req, res) => {
                 price = COALESCE($3, price),
                 image_url = COALESCE($4, image_url),
                 stock_quantity = COALESCE($5, stock_quantity),
-                is_available = COALESCE($6, is_available)
-            WHERE item_id = $7 RETURNING *
-        `, [name, item_type, price, image_url, stock_quantity, is_available, id]);
+                is_available = COALESCE($6, is_available),
+                unit = COALESCE($7, unit)
+            WHERE item_id = $8 RETURNING *
+        `, [name, item_type, price, image_url, stock_quantity, is_available, unit, id]);
 
         if (result.rowCount === 0) {
             return res.status(404).json({ status: 'error', message: 'Không tìm thấy sản phẩm' });

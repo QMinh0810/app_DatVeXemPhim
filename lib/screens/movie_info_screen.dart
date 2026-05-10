@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import '../models/movie_model.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import 'showtime_screen.dart';
@@ -26,21 +28,28 @@ class MovieInfoScreen extends StatelessWidget {
       );
       return;
     }
-    final uri = Uri.parse(url);
-    try {
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không thể mở trailer')),
-        );
+
+    final videoId = YoutubePlayer.convertUrlToId(url);
+    if (videoId == null) {
+      // Fallback: If not a valid Youtube URL, try opening in browser
+      final uri = Uri.parse(url);
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Không thể mở video này')),
+          );
+        }
       }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã có lỗi xảy ra khi mở trailer')),
-        );
-      }
+      return;
     }
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.85), // Lightbox effect
+      builder: (context) => _TrailerDialog(videoId: videoId),
+    );
   }
 
   @override
@@ -321,6 +330,89 @@ class MovieInfoScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _TrailerDialog extends StatefulWidget {
+  final String videoId;
+  const _TrailerDialog({Key? key, required this.videoId}) : super(key: key);
+
+  @override
+  State<_TrailerDialog> createState() => _TrailerDialogState();
+}
+
+class _TrailerDialogState extends State<_TrailerDialog> {
+  late YoutubePlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = YoutubePlayerController(
+      initialVideoId: widget.videoId,
+      flags: const YoutubePlayerFlags(
+        autoPlay: true,
+        mute: false,
+        enableCaption: false,
+      ),
+    );
+  }
+
+  @override
+  void deactivate() {
+    _controller.pause();
+    super.deactivate();
+  }
+
+  @override
+  void dispose() {
+    // Khôi phục lại màn hình dọc khi tắt video
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return YoutubePlayerBuilder(
+      player: YoutubePlayer(
+        controller: _controller,
+        showVideoProgressIndicator: true,
+        progressIndicatorColor: const Color(0xFFE51937),
+      ),
+      builder: (context, player) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  SizedBox(
+                    width: screenWidth * 0.95, // Chiếm 95% chiều ngang màn hình
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9, // Giữ tỉ lệ 16:9 chuẩn
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: player,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
