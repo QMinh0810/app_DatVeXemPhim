@@ -170,6 +170,20 @@ class ApiService {
     return body['data'] ?? [];
   }
 
+  /// Lưu đơn combo đồ ăn đặt kèm vé
+  /// items: [{ combo_id: int, quantity: int }, ...]
+  static Future<Map<String, dynamic>> createConcessionOrder({
+    required String madondatve,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/concessions/order'),
+      headers: _headers,
+      body: jsonEncode({'madondatve': madondatve, 'items': items}),
+    );
+    return jsonDecode(res.body);
+  }
+
   // ==================== REVIEWS ====================
 
   /// Xem bình luận của 1 phim

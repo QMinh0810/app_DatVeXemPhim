@@ -1,16 +1,31 @@
+/// Model biểu diễn thông tin Diễn viên hoặc Đạo diễn (kèm ảnh đại diện)
+class PersonInfo {
+  final String name;
+  final String? avatarUrl;
+
+  PersonInfo({required this.name, this.avatarUrl});
+
+  factory PersonInfo.fromJson(Map<String, dynamic> json) {
+    return PersonInfo(
+      name: json['name']?.toString() ?? '',
+      avatarUrl: json['avatar_url']?.toString(),
+    );
+  }
+}
+
 class MovieModel {
   final String id;
   final String title;
   final String description;
-  final int duration; // Số phút
+  final int duration;
   final DateTime releaseDate;
-  final int ratingLimit; // Ví dụ: 16, 18, 0 (không giới hạn)
+  final int ratingLimit;
   final String posterUrl;
   final String? trailerUrl;
   final List<String> genres;
-  final List<String> directors;
-  final List<String> actors;
-  final String status; // 'showing' hoặc 'coming_soon'
+  final List<PersonInfo> directors;
+  final List<PersonInfo> actors;
+  final String status;
 
   MovieModel({
     required this.id,
@@ -29,6 +44,18 @@ class MovieModel {
 
   /// Parse JSON từ Backend API (các field snake_case từ PostgreSQL)
   factory MovieModel.fromJson(Map<String, dynamic> json) {
+    // Parse directors: hỗ trợ cả dạng Object mới và String cũ (backward compat)
+    List<PersonInfo> parsePersonList(dynamic raw) {
+      if (raw == null) return [];
+      if (raw is List) {
+        return raw.map((e) {
+          if (e is Map<String, dynamic>) return PersonInfo.fromJson(e);
+          return PersonInfo(name: e.toString());
+        }).toList();
+      }
+      return [];
+    }
+
     return MovieModel(
       id: json['maphim'] ?? '',
       title: json['tenphim'] ?? '',
@@ -41,8 +68,8 @@ class MovieModel {
       posterUrl: json['poster_url'] ?? '',
       trailerUrl: json['trailer_url'],
       genres: (json['genres'] as List?)?.map((e) => e.toString()).toList() ?? [],
-      directors: (json['directors'] as List?)?.map((e) => e.toString()).toList() ?? [],
-      actors: (json['actors'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      directors: parsePersonList(json['directors']),
+      actors: parsePersonList(json['actors']),
       status: json['trangthai'] ?? 'now_showing',
     );
   }
@@ -57,8 +84,8 @@ class MovieModel {
     String? posterUrl,
     String? trailerUrl,
     List<String>? genres,
-    List<String>? directors,
-    List<String>? actors,
+    List<PersonInfo>? directors,
+    List<PersonInfo>? actors,
     String? status,
   }) {
     return MovieModel(

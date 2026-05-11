@@ -1,7 +1,6 @@
 /**
- * Script thực thi các lệnh ALTER TABLE theo yêu cầu task.md
- * 1. Thêm loại ghế 'hỏng' 
- * 2. Thêm trạng thái thanh toán 'pending'
+ * Script thực thi các lệnh ALTER TABLE / CREATE TABLE
+ * Chạy: node backend/alter_db.js
  */
 const db = require('./config/db');
 
@@ -31,6 +30,29 @@ async function alterDB() {
         console.log("4. Thêm cột unit cho items...");
         await db.query("ALTER TABLE items ADD COLUMN IF NOT EXISTS unit VARCHAR(50)");
         console.log("   ✅ Đã thêm cột unit cho items");
+
+        // 5. Tạo bảng order_concessions để lưu combo đồ ăn đặt kèm vé
+        console.log("5. Tạo bảng order_concessions...");
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS order_concessions (
+                id SERIAL PRIMARY KEY,
+                madondatve VARCHAR(10) NOT NULL,
+                combo_id INTEGER NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                unit_price INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT fk_oc_dondatve FOREIGN KEY (madondatve) REFERENCES dondatve(madondatve) ON DELETE CASCADE,
+                CONSTRAINT fk_oc_combo FOREIGN KEY (combo_id) REFERENCES combos(combo_id)
+            )
+        `);
+        console.log("   ✅ Đã tạo bảng order_concessions");
+
+        // 6. Thêm cột trangthai cho thongtintaikhoan (active/disabled)
+        console.log("6. Thêm cột trangthai cho thongtintaikhoan...");
+        await db.query("ALTER TABLE thongtintaikhoan ADD COLUMN IF NOT EXISTS trangthai VARCHAR(20) DEFAULT 'active' NOT NULL");
+        await db.query("ALTER TABLE thongtintaikhoan DROP CONSTRAINT IF EXISTS thongtintaikhoan_trangthai_check");
+        await db.query("ALTER TABLE thongtintaikhoan ADD CONSTRAINT thongtintaikhoan_trangthai_check CHECK (trangthai IN ('active', 'disabled'))");
+        console.log("   ✅ Đã thêm cột trangthai cho thongtintaikhoan");
 
         console.log("\n✅ ALTER DATABASE HOÀN THÀNH!");
         process.exit(0);

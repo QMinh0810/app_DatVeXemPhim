@@ -57,6 +57,11 @@ exports.login = async (req, res) => {
 
         const user = userRes.rows[0];
 
+        // Kiểm tra tài khoản bị vô hiệu hóa
+        if (user.trangthai === 'disabled') {
+            return res.status(403).json({ status: 'error', message: 'Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ hỗ trợ.' });
+        }
+
         // Mật khẩu thuần ở DB (do SQL giả lập) hoặc Mật khẩu đã Hash
         const isMatch = await bcrypt.compare(password, user.matkhau);
         if (!isMatch && password !== user.matkhau) { // Fallback cho mớ seed data cùi bắp
@@ -112,6 +117,14 @@ exports.forgotPassword = async (req, res) => {
                 status: 'error', 
                 message: 'Email này không tồn tại trong hệ thống. Vui lòng kiểm tra lại hoặc đăng ký tài khoản mới.' 
             });
+       }
+
+       // 1b. Kiểm tra tài khoản bị vô hiệu hóa
+       if (userRes.rows[0].trangthai === 'disabled') {
+           return res.status(403).json({
+               status: 'error',
+               message: 'Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ hỗ trợ để được giúp đỡ.'
+           });
        }
 
        // 2. Chỉ sinh OTP và gửi email nếu tài khoản tồn tại
@@ -224,6 +237,14 @@ exports.googleLogin = async (req, res) => {
         } else {
             user = userRes.rows[0];
             console.log("=> User đã tồn tại:", user.mataikhoan);
+
+            // Kiểm tra tài khoản bị vô hiệu hóa
+            if (user.trangthai === 'disabled') {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ hỗ trợ.'
+                });
+            }
         }
 
         // 4. Ký token JWT

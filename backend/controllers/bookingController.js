@@ -207,11 +207,10 @@ exports.createBooking = async (req, res) => {
         // 4.5 Tạo thông tin bắp nước
         if (concessionDetails.length > 0) {
             for (let c of concessionDetails) {
-                const thanhTien = c.price * c.quantity;
                 await client.query(`
-                    INSERT INTO order_concessions (madondatve, item_id, combo_id, so_luong, gia_luc_mua, thanh_tien)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                `, [maDonDatVe, c.itemId || null, c.comboId || null, c.quantity, c.price, thanhTien]);
+                    INSERT INTO order_concessions (madondatve, combo_id, quantity, unit_price)
+                    VALUES ($1, $2, $3, $4)
+                `, [maDonDatVe, c.comboId, c.quantity, c.price]);
             }
         }
 

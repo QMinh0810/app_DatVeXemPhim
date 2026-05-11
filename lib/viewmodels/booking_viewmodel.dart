@@ -82,6 +82,11 @@ class BookingViewModel extends ChangeNotifier {
 
   /// Tính tổng tiền vé và combo
   double get totalPrice {
+    return ticketTotalPrice + comboTotalPrice;
+  }
+
+  /// Tổng tiền riêng phần vé
+  double get ticketTotalPrice {
     double total = 0;
     for (final seatName in _selectedSeats) {
       final seatData = _seatMap.firstWhere(
@@ -93,13 +98,19 @@ class BookingViewModel extends ChangeNotifier {
       );
       total += _seatPrice * seatData.hesogiaghe;
     }
-    
-    // Add combo prices
+    return total;
+  }
+
+  /// Tổng tiền riêng phần combo đồ ăn
+  double get comboTotalPrice {
+    double total = 0;
     _selectedCombos.forEach((comboId, quantity) {
-      final combo = _availableCombos.firstWhere((c) => c.comboId == comboId, orElse: () => ComboData(comboId: 0, name: '', description: '', price: 0, imageUrl: ''));
+      final combo = _availableCombos.firstWhere(
+        (c) => c.comboId == comboId,
+        orElse: () => ComboData(comboId: 0, name: '', description: '', price: 0, imageUrl: ''),
+      );
       total += combo.price * quantity;
     });
-    
     return total;
   }
 
@@ -318,6 +329,23 @@ class BookingViewModel extends ChangeNotifier {
       _errorMessage = 'Không thể kết nối máy chủ để đặt vé.';
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Gửi đơn combo đồ ăn lên server (gọi sau submitBooking thành công)
+  Future<void> submitConcessionOrder() async {
+    if (_bookingResult == null || _selectedCombos.isEmpty) return;
+    try {
+      final items = _selectedCombos.entries
+          .map((e) => {'combo_id': e.key, 'quantity': e.value})
+          .toList();
+      await ApiService.createConcessionOrder(
+        madondatve: _bookingResult!,
+        items: items,
+      );
+    } catch (e) {
+      // Log lỗi nhưng không block UX — combo order fail nên silent
+      debugPrint('submitConcessionOrder error: $e');
     }
   }
 

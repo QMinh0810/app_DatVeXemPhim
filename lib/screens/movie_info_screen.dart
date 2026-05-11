@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
@@ -8,7 +9,6 @@ import '../models/review_model.dart';
 import '../services/api_service.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import 'showtime_screen.dart';
-import 'package:intl/intl.dart';
 
 class MovieInfoScreen extends StatelessWidget {
   final MovieModel movie;
@@ -34,7 +34,6 @@ class MovieInfoScreen extends StatelessWidget {
 
     final videoId = YoutubePlayer.convertUrlToId(url);
     if (videoId == null) {
-      // Fallback: If not a valid Youtube URL, try opening in browser
       final uri = Uri.parse(url);
       try {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -50,7 +49,7 @@ class MovieInfoScreen extends StatelessWidget {
 
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.85), // Lightbox effect
+      barrierColor: Colors.black.withOpacity(0.85),
       builder: (context) => _TrailerDialog(videoId: videoId),
     );
   }
@@ -78,28 +77,15 @@ class MovieInfoScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- Trailer Thumbnail Area ---
                   _buildTrailerThumbnail(context),
-
-                  // --- Poster + Title + Date + Duration ---
                   _buildMovieHeader(),
-
                   const Divider(height: 1, color: Color(0xFFE0E0E0)),
-
-                  // --- Description ---
                   _buildDescription(),
-
                   const Divider(height: 1, color: Color(0xFFE0E0E0)),
-
-                  // --- Detail Table ---
                   _buildDetailTable(),
-
                   const Divider(height: 1, color: Color(0xFFE0E0E0)),
-                  
-                  // --- Review Button ---
                   _buildReviewSection(context),
-
-                  const SizedBox(height: 100), // space for bottom button
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
@@ -110,7 +96,6 @@ class MovieInfoScreen extends StatelessWidget {
     );
   }
 
-  /// Trailer thumbnail with play button overlay
   Widget _buildTrailerThumbnail(BuildContext context) {
     return GestureDetector(
       onTap: () => _openTrailer(context),
@@ -128,9 +113,7 @@ class MovieInfoScreen extends StatelessWidget {
                 child: const Icon(Icons.movie, size: 80, color: Colors.white54),
               ),
             ),
-            // Dark overlay
             Container(color: Colors.black.withOpacity(0.35)),
-            // Play button
             Center(
               child: Container(
                 width: 60,
@@ -148,14 +131,12 @@ class MovieInfoScreen extends StatelessWidget {
     );
   }
 
-  /// Poster on left, title + date/duration on right
   Widget _buildMovieHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Poster thumbnail (overlapping the trailer area)
           Transform.translate(
             offset: const Offset(0, -40),
             child: Container(
@@ -185,7 +166,6 @@ class MovieInfoScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          // Title + info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,7 +181,6 @@ class MovieInfoScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Date & Duration row
                 Row(
                   children: [
                     _buildChip(Icons.calendar_today_outlined,
@@ -211,7 +190,6 @@ class MovieInfoScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                // Rating badge
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -231,7 +209,6 @@ class MovieInfoScreen extends StatelessWidget {
     );
   }
 
-  /// Chip with icon + text (date, duration)
   Widget _buildChip(IconData icon, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -250,64 +227,55 @@ class MovieInfoScreen extends StatelessWidget {
     );
   }
 
-  /// Movie description section
   Widget _buildDescription() {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            movie.description,
-            style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.6),
-          ),
-        ],
+      child: Text(
+        movie.description,
+        style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.6),
       ),
     );
   }
 
-  /// Detail table: Kiểm duyệt, Thể loại, Đạo diễn, Diễn viên
   Widget _buildDetailTable() {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildDetailRow('Kiểm duyệt', movie.ratingLimit > 0
               ? 'T${movie.ratingLimit} - Phim được phổ biến đến người xem từ đủ ${movie.ratingLimit} tuổi trở lên.'
               : 'P - Phim được phổ biến đến mọi đối tượng.'),
           const SizedBox(height: 12),
           _buildDetailRow('Thể loại', movie.genres.isNotEmpty ? movie.genres.join(', ') : 'Đang cập nhật'),
-          const SizedBox(height: 12),
-          if (movie.directors.isNotEmpty)
-            _buildDirectorsList()
-          else
-            _buildDetailRow('Đạo diễn', 'Đang cập nhật'),
-          const SizedBox(height: 24),
-          if (movie.actors.isNotEmpty)
-            _buildActorsList()
-          else
-            _buildDetailRow('Diễn viên', 'Đang cập nhật'),
+          const SizedBox(height: 20),
+          if (movie.directors.isNotEmpty) _buildPersonsList(title: 'Đạo diễn', persons: movie.directors),
+          const SizedBox(height: 20),
+          if (movie.actors.isNotEmpty) _buildPersonsList(title: 'Diễn viên', persons: movie.actors),
         ],
       ),
     );
   }
 
-  Widget _buildDirectorsList() {
+  /// Danh sách diễn viên / đạo diễn dạng cuộn ngang với ảnh thật từ DB
+  Widget _buildPersonsList({required String title, required List<PersonInfo> persons}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Đạo diễn',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
+        Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
         ),
         const SizedBox(height: 12),
         SizedBox(
           height: 115,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: movie.directors.length,
+            itemCount: persons.length,
             itemBuilder: (context, index) {
-              final director = movie.directors[index];
+              final person = persons[index];
+              // Ưu tiên dùng ảnh thật từ DB, fallback về ui-avatars nếu null/rỗng
+              final hasRealAvatar = person.avatarUrl != null && person.avatarUrl!.isNotEmpty;
               return Container(
                 width: 80,
                 margin: const EdgeInsets.only(right: 12),
@@ -316,59 +284,15 @@ class MovieInfoScreen extends StatelessWidget {
                     CircleAvatar(
                       radius: 30,
                       backgroundColor: Colors.grey[200],
-                      backgroundImage: NetworkImage(
-                        'https://ui-avatars.com/api/?name=${Uri.encodeComponent(director)}&background=random&color=fff&size=128',
-                      ),
+                      backgroundImage: hasRealAvatar
+                          ? NetworkImage(person.avatarUrl!)
+                          : NetworkImage(
+                              'https://ui-avatars.com/api/?name=${Uri.encodeComponent(person.name)}&background=random&color=fff&size=128',
+                            ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      director,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActorsList() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Diễn viên',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 115, // Đã tăng chiều cao để tránh lỗi Overflow khi tên xuống dòng
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: movie.actors.length,
-            itemBuilder: (context, index) {
-              final actor = movie.actors[index];
-              return Container(
-                width: 80,
-                margin: const EdgeInsets.only(right: 12),
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Colors.grey[200],
-                      backgroundImage: NetworkImage(
-                        'https://ui-avatars.com/api/?name=${Uri.encodeComponent(actor)}&background=random&color=fff&size=128',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      actor,
+                      person.name,
                       textAlign: TextAlign.center,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -407,25 +331,28 @@ class MovieInfoScreen extends StatelessWidget {
   }
 
   Widget _buildReviewSection(BuildContext context) {
-    return InkWell(
-      onTap: () => _showReviewBottomSheet(context),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.star, color: Colors.amber, size: 24),
-                const SizedBox(width: 8),
-                const Text(
-                  'Đánh giá & Bình luận',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
-                ),
-              ],
-            ),
-            const Icon(Icons.chevron_right, color: Colors.grey),
-          ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: InkWell(
+        onTap: () => _showReviewBottomSheet(context),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE51937)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.rate_review_outlined, color: Color(0xFFE51937), size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Xem đánh giá',
+                style: TextStyle(color: Color(0xFFE51937), fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -435,116 +362,119 @@ class MovieInfoScreen extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
         return DraggableScrollableSheet(
+          expand: false,
           initialChildSize: 0.7,
-          minChildSize: 0.5,
           maxChildSize: 0.95,
-          builder: (_, controller) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    height: 5,
-                    width: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+          minChildSize: 0.4,
+          builder: (context, controller) {
+            return Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text('Bình luận', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Text(
+                    'Đánh giá phim',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: FutureBuilder<List<dynamic>>(
-                      future: ApiService.fetchReviews(movie.id),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        } else if (snapshot.hasError) {
-                          return Center(child: Text('Lỗi: ${snapshot.error}'));
-                        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                          return const Center(child: Text('Chưa có bình luận nào.'));
-                        }
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: FutureBuilder<List<dynamic>>(
+                    future: ApiService.fetchReviews(movie.id),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      } else if (snapshot.hasError) {
+                        return Center(child: Text('Lỗi: ${snapshot.error}'));
+                      } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const Center(child: Text('Chưa có bình luận nào.'));
+                      }
 
-                        final reviews = snapshot.data!.map((json) => ReviewModel.fromJson(json)).toList();
+                      final reviews = snapshot.data!.map((json) => ReviewModel.fromJson(json)).toList();
 
-                        return ListView.separated(
-                          controller: controller,
-                          itemCount: reviews.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1, indent: 64),
-                          itemBuilder: (context, index) {
-                            final review = reviews[index];
-                            DateTime? time;
-                            try {
-                              time = DateTime.parse(review.thoiDiemDanhGia);
-                            } catch (_) {}
+                      return ListView.separated(
+                        controller: controller,
+                        itemCount: reviews.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1, indent: 64),
+                        itemBuilder: (context, index) {
+                          final review = reviews[index];
+                          DateTime? time;
+                          try {
+                            time = DateTime.parse(review.thoiDiemDanhGia);
+                          } catch (_) {}
 
-                            return Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 20,
-                                    backgroundColor: Colors.grey[200],
-                                    backgroundImage: review.anhDaiDien != null && review.anhDaiDien!.isNotEmpty
-                                        ? NetworkImage(review.anhDaiDien!)
-                                        : NetworkImage('https://ui-avatars.com/api/?name=${Uri.encodeComponent(review.hoTen)}&background=random'),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
+                          return Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: Colors.grey[200],
+                                  backgroundImage: review.anhDaiDien != null && review.anhDaiDien!.isNotEmpty
+                                      ? NetworkImage(review.anhDaiDien!)
+                                      : NetworkImage(
+                                          'https://ui-avatars.com/api/?name=${Uri.encodeComponent(review.hoTen)}&background=random'),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            review.hoTen,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                          if (time != null)
                                             Text(
-                                              review.hoTen,
-                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                              DateFormat('dd/MM/yyyy HH:mm').format(time),
+                                              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                                             ),
-                                            if (time != null)
-                                              Text(
-                                                DateFormat('dd/MM/yyyy HH:mm').format(time),
-                                                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                                              ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Row(
-                                          children: [
-                                            const Icon(Icons.star, color: Colors.amber, size: 16),
-                                            const SizedBox(width: 4),
-                                            Text('${review.danhGia}/10', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          review.noiDung,
-                                          style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black87),
-                                        ),
-                                      ],
-                                    ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.star, color: Colors.amber, size: 16),
+                                          const SizedBox(width: 4),
+                                          Text('${review.danhGia}/10',
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        review.noiDung,
+                                        style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black87),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
                   ),
-                ],
-              ),
+                ),
+              ],
             );
           },
         );
@@ -618,7 +548,6 @@ class _TrailerDialogState extends State<_TrailerDialog> {
 
   @override
   void dispose() {
-    // Khôi phục lại màn hình dọc khi tắt video
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
@@ -650,9 +579,9 @@ class _TrailerDialogState extends State<_TrailerDialog> {
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                   SizedBox(
-                    width: screenWidth * 0.95, // Chiếm 95% chiều ngang màn hình
+                    width: screenWidth * 0.95,
                     child: AspectRatio(
-                      aspectRatio: 16 / 9, // Giữ tỉ lệ 16:9 chuẩn
+                      aspectRatio: 16 / 9,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: player,

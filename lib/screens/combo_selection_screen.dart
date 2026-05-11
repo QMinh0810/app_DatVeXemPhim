@@ -56,22 +56,21 @@ class _ComboSelectionScreenState extends State<ComboSelectionScreen> {
                 child: Row(
                   children: [
                     // Hình ảnh
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        width: 80,
+                        height: 80,
                         color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(8),
-                        image: combo.imageUrl.isNotEmpty
-                            ? DecorationImage(
-                                image: NetworkImage(combo.imageUrl),
+                        child: combo.imageUrl.isNotEmpty
+                            ? Image.network(
+                                combo.imageUrl,
                                 fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Icon(Icons.fastfood, size: 40, color: Colors.grey),
                               )
-                            : null,
+                            : const Icon(Icons.fastfood, size: 40, color: Colors.grey),
                       ),
-                      child: combo.imageUrl.isEmpty 
-                          ? const Icon(Icons.fastfood, size: 40, color: Colors.grey)
-                          : null,
                     ),
                     const SizedBox(width: 16),
                     // Thông tin combo
