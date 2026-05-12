@@ -58,6 +58,7 @@ class BookingViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _bookingResult; // Mã đơn hàng sau khi đặt thành công
+  String? _paymentUrl;    // URL thanh toán (VNPay/Momo) nếu có
   
   // Combos
   List<ComboData> _availableCombos = [];
@@ -77,6 +78,7 @@ class BookingViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get bookingResult => _bookingResult;
+  String? get paymentUrl => _paymentUrl;
   List<ComboData> get availableCombos => _availableCombos;
   Map<int, int> get selectedCombos => _selectedCombos;
 
@@ -317,6 +319,7 @@ class BookingViewModel extends ChangeNotifier {
 
       if (response['status'] == 'success') {
         _bookingResult = response['data']?['maDonDatVe'] ?? 'OK';
+        _paymentUrl = response['data']?['paymentUrl']; // Lấy URL thanh toán từ backend
         notifyListeners();
         return true;
       } else {
@@ -373,6 +376,7 @@ class BookingViewModel extends ChangeNotifier {
     _selectedTimeDisplay = null;
     _selectedDateDisplay = null;
     _bookingResult = null;
+    _paymentUrl = null;
     _errorMessage = null;
     _selectedCombos.clear();
     notifyListeners();

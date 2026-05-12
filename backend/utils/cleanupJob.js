@@ -3,7 +3,7 @@ const { createNotification } = require('./notificationHelper');
 
 /**
  * Hàm giải phóng các ghế (vé) và đơn hàng ở trạng thái 'pending'
- * đã quá thời gian giữ ghế (10 phút).
+ * đã quá thời gian giữ ghế (2 phút).
  * Đồng thời gửi thông báo in-app cho người dùng bị ảnh hưởng.
  */
 const releaseExpiredSeats = async () => {

@@ -5,10 +5,7 @@ import 'package:flutter/foundation.dart';
 class ApiService {
   // Tự động nhận diện môi trường: Web dùng localhost, máy ảo Android dùng 10.0.2.2
   static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:3000/api';
-    }
-    return 'http://10.0.2.2:3000/api';
+    return 'https://overall-preschool-nutlike.ngrok-free.dev/api';
   }
 
   // Lưu trữ JWT Token sau khi đăng nhập
@@ -20,6 +17,7 @@ class ApiService {
   // Header mặc định cho mọi request
   static Map<String, String> get _headers => {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true', // Bỏ qua trang cảnh báo của ngrok
     if (_token != null) 'Authorization': 'Bearer $_token',
   };
 
