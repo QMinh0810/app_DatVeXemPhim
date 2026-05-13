@@ -53,9 +53,51 @@ class _MovieListScreenState extends State<MovieListScreen> {
             backgroundColor: Colors.white,
             iconTheme: const IconThemeData(color: Colors.black),
             elevation: 0,
+            actions: [
+              if (context.watch<BookingViewModel>().selectedTheaterId != null)
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: Colors.black),
+                  onPressed: () => context.read<BookingViewModel>().resetBooking(),
+                  tooltip: 'Chọn lại rạp',
+                )
+            ],
           ),
           body: Column(
             children: [
+              // Hiển thị rạp đang chọn
+              Consumer<BookingViewModel>(
+                builder: (context, bookingVM, child) {
+                  if (bookingVM.selectedTheaterId == null) return const SizedBox.shrink();
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    color: const Color(0xFFE51937).withOpacity(0.1),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 16, color: Color(0xFFE51937)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Đang xem tại: ${bookingVM.selectedTheaterName}',
+                            style: const TextStyle(
+                              color: Color(0xFFE51937),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            bookingVM.resetBooking();
+                            Navigator.pop(context);
+                          },
+                          child: const Text('Đổi rạp', style: TextStyle(fontSize: 12, color: Colors.blue)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
               // Thanh tìm kiếm + Nút lọc
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),

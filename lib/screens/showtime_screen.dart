@@ -56,7 +56,8 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
         selectedDateStr = DateFormat('yyyy-MM-dd').format(_dates[_selectedDateIndex - 1]);
       }
       
-      final data = await ApiService.fetchShowtimes(movieId: movieId, date: selectedDateStr);
+      final theaterId = bookingVM.selectedTheaterId;
+      final data = await ApiService.fetchShowtimes(movieId: movieId, date: selectedDateStr, theaterId: theaterId);
       
       // Lọc bỏ lịch chiếu quá khứ (không hiển thị suất chiếu đã qua)
       final now = DateTime.now();
