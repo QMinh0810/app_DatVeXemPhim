@@ -1,0 +1,54 @@
+{
+  "api": {
+    "name": "Hủy đơn hàng chủ động (Manual Cancel)",
+    "description": "Dùng để người dùng tự hủy đơn hàng đang chờ thanh toán (pending) trực tiếp từ trong App.",
+    "endpoint": "/api/bookings/:id/cancel",
+    "method": "POST",
+    "auth": "Bearer Token (Yêu cầu đăng nhập)",
+    "parameters": {
+      "path": {
+        "id": "Mã đơn đặt vé (madondatve), ví dụ: DON173234"
+      }
+    },
+    "responses": {
+      "success": {
+        "status": 200,
+        "body": {
+          "status": "success",
+          "message": "Đơn hàng đã được hủy thành công, ghế đã được giải phóng."
+        }
+      },
+      "errors": {
+        "not_found": {
+          "status": 404,
+          "description": "Không tìm thấy mã đơn hàng trong hệ thống.",
+          "body": {
+            "status": "error",
+            "message": "Không tìm thấy đơn hàng"
+          }
+        },
+        "invalid_state": {
+          "status": 400,
+          "description": "Đơn hàng không ở trạng thái 'pending' (ví dụ đã thanh toán rồi) thì không được phép hủy.",
+          "body": {
+            "status": "error",
+            "message": "Không thể hủy đơn hàng đang ở trạng thái: paid"
+          }
+        },
+        "unauthorized": {
+          "status": 401,
+          "description": "Token hết hạn hoặc không hợp lệ.",
+          "body": {
+            "status": "error",
+            "message": "Unauthorized"
+          }
+        }
+      }
+    },
+    "notes": [
+      "Sau khi gọi API này thành công, các ghế trong đơn hàng sẽ lập tức quay về trạng thái trống.",
+      "Người dùng sẽ nhận được một thông báo In-App báo rằng đơn hàng đã bị hủy.",
+      "Frontend nên gọi API này khi người dùng nhấn nút 'Hủy thanh toán' trong màn hình chi tiết giao dịch."
+    ]
+  }
+}

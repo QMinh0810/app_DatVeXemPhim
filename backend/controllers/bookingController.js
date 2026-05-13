@@ -637,25 +637,36 @@ exports.momoReturn = async (req, res) => {
             return res.send("Chữ ký không hợp lệ!");
         }
 
-        const { resultCode, orderId } = req.query;
+        const { resultCode, orderId, message, transId } = req.query;
 
         if (resultCode == '0') {
             res.send(`
                 <html>
-                    <body style="text-align: center; padding-top: 50px;">
+                    <body style="text-align: center; padding-top: 50px; font-family: sans-serif;">
                         <h1 style="color: green;">Thanh toán MoMo thành công!</h1>
-                        <p>Đơn hàng ${orderId} đã được ghi nhận.</p>
+                        <p>Đơn hàng <b>${orderId}</b> đã được ghi nhận.</p>
                         <p>Bạn có thể quay lại ứng dụng để xem vé.</p>
+                        <button onclick="window.close()" style="padding: 10px 20px; background: #ae2070; color: white; border: none; border-radius: 5px; cursor: pointer;">Đóng trình duyệt</button>
                     </body>
                 </html>
             `);
         } else {
+            // Xử lý khi người dùng hủy hoặc lỗi
+            await handlePaymentFailure(orderId, transId, resultCode, message);
+            
+            let statusMessage = "Thanh toán thất bại hoặc đã bị hủy";
+            if (resultCode == '1006') {
+                statusMessage = "Bạn đã hủy giao dịch MoMo";
+            }
+
             res.send(`
                 <html>
-                    <body style="text-align: center; padding-top: 50px;">
-                        <h1 style="color: red;">Thanh toán thất bại hoặc đã bị hủy</h1>
-                        <p>Mã lỗi: ${resultCode}</p>
-                        <a href="/">Quay về trang chủ</a>
+                    <body style="text-align: center; padding-top: 50px; font-family: sans-serif;">
+                        <h1 style="color: #ae2070;">${statusMessage}</h1>
+                        <p>Mã đơn hàng: <b>${orderId}</b></p>
+                        <p>Lý do: ${message || 'Giao dịch không thành công'}</p>
+                        <p>Ghế của bạn đã được giải phóng. Vui lòng thực hiện đặt lại nếu muốn.</p>
+                        <button onclick="window.close()" style="padding: 10px 20px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer;">Quay lại ứng dụng</button>
                     </body>
                 </html>
             `);
@@ -679,14 +690,16 @@ exports.momoIpn = async (req, res) => {
             return res.status(400).json({ message: "Invalid signature" });
         }
 
-        const { orderId, resultCode, amount, transId } = req.body;
+        const { orderId, resultCode, amount, transId, message } = req.body;
 
         if (resultCode == '0') {
             // Thanh toán thành công -> Cập nhật DB
             await updateOrderAfterPayment(orderId, transId);
             console.log(`MoMo IPN Success: Order ${orderId} marked as paid.`);
         } else {
-            console.log(`MoMo IPN Failed: Order ${orderId} with code ${resultCode}`);
+            // Thanh toán thất bại hoặc người dùng hủy
+            await handlePaymentFailure(orderId, transId, resultCode, message);
+            console.log(`MoMo IPN Failed/Cancelled: Order ${orderId} with code ${resultCode} - ${message}`);
         }
 
         // MoMo yêu cầu trả về HTTP 204 hoặc JSON
@@ -779,4 +792,111 @@ async function updateOrderAfterPayment(maDonDatVe, transId) {
         client.release();
     }
 }
+
+/**
+ * Hàm dùng chung để xử lý khi thanh toán thất bại hoặc người dùng hủy
+ */
+async function handlePaymentFailure(maDonDatVe, transId, resultCode, message) {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Cập nhật bảng thongtinthanhtoan
+        await client.query(
+            "UPDATE thongtinthanhtoan SET trangthai = 'failed', paymentgatewaytransactionid = $1 WHERE madondatve = $2",
+            [transId || `ERR_${resultCode}`, maDonDatVe]
+        );
+
+        // 2. Cập nhật trạng thái đơn hàng dondatve (chỉ khi đang pending)
+        await client.query(
+            "UPDATE dondatve SET trangthai = 'cancelled' WHERE madondatve = $1 AND (trangthai = 'pending' OR TRIM(trangthai) = 'pending')",
+            [maDonDatVe]
+        );
+
+        // 3. Hủy tất cả vé thuộc đơn hàng này (chỉ khi chưa cancelled)
+        await client.query(
+            "UPDATE vexemphim SET trangthai = 'cancelled' WHERE madondatve = $1 AND (trangthai != 'cancelled' AND TRIM(trangthai) != 'cancelled')",
+            [maDonDatVe]
+        );
+
+        // Lấy thông tin khách hàng để gửi thông báo
+        const orderInfoRes = await client.query(`
+            SELECT d.id_khach, p.tenphim, r.tenrapphim, p.maphim
+            FROM dondatve d
+            JOIN vexemphim v ON d.madondatve = v.madondatve
+            JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
+            JOIN phim p ON lc.maphim = p.maphim
+            JOIN phongrapphim pr ON lc.maphong = pr.maphong
+            JOIN rapphim r ON pr.marapphim = r.marapphim
+            WHERE d.madondatve = $1
+            LIMIT 1
+        `, [maDonDatVe]);
+
+        if (orderInfoRes.rows.length > 0) {
+            const { id_khach, tenphim, tenrapphim, maphim } = orderInfoRes.rows[0];
+            await createNotification({
+                userId: id_khach,
+                tieuDe: 'Thanh toán không thành công ❌',
+                noiDung: `Giao dịch cho đơn hàng ${maDonDatVe} (Phim: ${tenphim}) đã bị hủy hoặc thất bại. Ghế của bạn đã được giải phóng.`,
+                maDonDatVe,
+                maPhim: maphim
+            });
+        }
+
+        await client.query('COMMIT');
+        return true;
+    } catch (e) {
+        if (client) await client.query('ROLLBACK');
+        console.error("handlePaymentFailure Error:", e);
+        throw e;
+    } finally {
+        client.release();
+    }
+}
+
+/**
+ * API Controller: Cho phép người dùng chủ động hủy đơn hàng từ App
+ */
+exports.cancelBooking = async (req, res) => {
+    const { id } = req.params;
+    // const userIdFromToken = req.user.id; // Có thể dùng để bảo mật thêm
+
+    const client = await db.connect();
+    try {
+        // 1. Kiểm tra đơn hàng có tồn tại
+        const orderRes = await client.query(
+            "SELECT trangthai FROM dondatve WHERE madondatve = $1",
+            [id]
+        );
+
+        if (orderRes.rows.length === 0) {
+            return res.status(404).json({ status: 'error', message: 'Không tìm thấy đơn hàng' });
+        }
+
+        const order = orderRes.rows[0];
+
+        // 2. Chỉ cho phép hủy nếu đang ở trạng thái pending
+        const currentStatus = (order.trangthai || '').trim();
+        if (currentStatus !== 'pending') {
+            return res.status(400).json({ 
+                status: 'error', 
+                message: `Không thể hủy đơn hàng đang ở trạng thái: ${currentStatus}` 
+            });
+        }
+
+        // 3. Gọi hàm helper để xử lý hủy tập trung
+        await handlePaymentFailure(id, 'USER_CANCEL_IN_APP', 1006, 'Người dùng chủ động hủy từ ứng dụng');
+
+        return res.json({ 
+            status: 'success', 
+            message: 'Đơn hàng đã được hủy thành công, ghế đã được giải phóng.' 
+        });
+
+    } catch (error) {
+        console.error("Lỗi cancelBooking:", error);
+        return res.status(500).json({ status: 'error', message: 'Lỗi hệ thống khi hủy đơn hàng' });
+    } finally {
+        client.release();
+    }
+};
 
