@@ -51,6 +51,7 @@ class BookingViewModel extends ChangeNotifier {
   String _paymentMethod = 'momo';
   double _seatPrice = 100000.0; // Giá vé cơ sở từ lịch chiếu
   String? _selectedShowtimeId;
+  String? _selectedTheaterId;
   String? _selectedTheaterName;
   String? _selectedRoomName;
   String? _selectedTimeDisplay;
@@ -70,6 +71,7 @@ class BookingViewModel extends ChangeNotifier {
   String get paymentMethod => _paymentMethod;
   double get basePrice => _seatPrice;
   String? get selectedShowtimeId => _selectedShowtimeId;
+  String? get selectedTheaterId => _selectedTheaterId;
   String? get selectedTheaterName => _selectedTheaterName;
   String? get selectedRoomName => _selectedRoomName;
   String? get selectedTimeDisplay => _selectedTimeDisplay;
@@ -155,6 +157,12 @@ class BookingViewModel extends ChangeNotifier {
     _selectedSeats.clear();
     _bookingResult = null;
     _errorMessage = null;
+    notifyListeners();
+  }
+
+  void selectTheater(String theaterId, String theaterName) {
+    _selectedTheaterId = theaterId;
+    _selectedTheaterName = theaterName;
     notifyListeners();
   }
 
@@ -368,6 +376,7 @@ class BookingViewModel extends ChangeNotifier {
     _bookedSeats.clear();
     _seatMap.clear();
     _selectedShowtimeId = null;
+    _selectedTheaterId = null;
     _selectedTheaterName = null;
     _selectedRoomName = null;
     _selectedTimeDisplay = null;

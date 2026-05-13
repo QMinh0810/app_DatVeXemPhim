@@ -10,6 +10,7 @@ import '../widgets/horizontal_image_list.dart';
 import 'dummy_screen.dart';
 import 'movie_list_screen.dart';
 import 'profile_screen.dart';
+import 'theater_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (_selectedIndex == 1) {
       return const MovieListScreen();
     } else if (_selectedIndex == 2) {
-      return const DummyScreen(title: 'Rạp Phim');
+      return const TheaterScreen();
     } else {
       return const ProfileScreen();
     }

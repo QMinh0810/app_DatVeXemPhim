@@ -132,6 +132,13 @@ class ApiService {
     return body['data'] ?? [];
   }
 
+  /// Lấy danh sách rạp phim
+  static Future<List<dynamic>> fetchTheaters() async {
+    final res = await http.get(Uri.parse('$baseUrl/bookings/theaters'), headers: _headers);
+    final body = jsonDecode(res.body);
+    return body['data'] ?? [];
+  }
+
   /// Lấy sơ đồ ghế ngồi của 1 suất chiếu
   static Future<Map<String, dynamic>> fetchSeats(String showtimeId) async {
     final res = await http.get(
