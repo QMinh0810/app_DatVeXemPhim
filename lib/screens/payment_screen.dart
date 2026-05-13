@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import 'home_screen.dart';
 
@@ -108,13 +109,41 @@ class PaymentScreen extends StatelessWidget {
             child: ElevatedButton(
               onPressed: bookingVM.isLoading ? null : () async {
                 final success = await bookingVM.submitBooking();
+                
                 if (success && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Đặt vé thành công! Mã đơn: ${bookingVM.bookingResult}'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
+                  // Nếu có URL thanh toán (VNPay/Momo), thực hiện mở trình duyệt
+                  if (bookingVM.paymentUrl != null) {
+                    final Uri url = Uri.parse(bookingVM.paymentUrl!);
+                    if (await canLaunchUrl(url)) {
+                      await launchUrl(url, mode: LaunchMode.externalApplication);
+                      
+                      // Hiển thị thông báo hướng dẫn người dùng
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Đang chuyển hướng đến cổng thanh toán...'),
+                            backgroundColor: Colors.blue,
+                          ),
+                        );
+                      }
+                    } else {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Không thể mở liên kết thanh toán')),
+                        );
+                      }
+                    }
+                  } else {
+                    // Thanh toán khác hoặc không cần URL (ví dụ thanh toán tại quầy)
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Đặt vé thành công! Mã đơn: ${bookingVM.bookingResult}'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+
+                  // Sau khi xử lý xong (hoặc đã mở trình duyệt), reset và về trang chủ
                   bookingVM.resetBooking();
                   Navigator.pushAndRemoveUntil(
                     context,

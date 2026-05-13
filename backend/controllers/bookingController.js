@@ -1,6 +1,8 @@
 const db = require('../config/db');
 const emailService = require('../utils/emailService');
 const { createNotification } = require('../utils/notificationHelper');
+const vnpayService = require('../utils/vnpayService');
+const momoService = require('../utils/momoService');
 
 // Lấy danh sách Rạp phim
 exports.getTheaters = async (req, res) => {
@@ -232,8 +234,8 @@ exports.createBooking = async (req, res) => {
             }
             let ticketPrice = basePrice * targetSeat.hesogiaghe;
             
-            // Giữ ghế trong 10 phút
-            let expireTime = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+            // Giữ ghế trong 2 phút
+            let expireTime = new Date(Date.now() + 2 * 60 * 1000).toISOString();
 
             await client.query(`
                 INSERT INTO vexemphim (mavexemphim, qrcode, thoigianhethan, giave, maghe, malichchieu, madondatve, trangthai)
@@ -245,6 +247,28 @@ exports.createBooking = async (req, res) => {
 
         // Hoàn tất lưu dữ liệu
         await client.query('COMMIT');
+
+        // --- XỬ LÝ THANH TOÁN VNPAY ---
+        let paymentUrl = null;
+        if (paymentMethod === 'vnpay') {
+            const ipAddr = req.headers['x-forwarded-for'] || 
+                           req.connection.remoteAddress || 
+                           req.socket.remoteAddress || 
+                           req.connection.socket.remoteAddress;
+            
+            paymentUrl = vnpayService.buildPaymentUrl(
+                maDonDatVe,
+                totalPrice,
+                `Thanh toan ve xem phim DON ${maDonDatVe}`,
+                ipAddr
+            );
+        } else if (paymentMethod === 'momo') {
+            paymentUrl = await momoService.createPaymentUrl(
+                maDonDatVe,
+                totalPrice,
+                `Thanh toan ve xem phim DON ${maDonDatVe}`
+            );
+        }
 
         // Tạo thông báo: Đặt vé thành công (giữ chỗ)
         const showtimeInfoRes = await db.query(`
@@ -260,7 +284,7 @@ exports.createBooking = async (req, res) => {
             await createNotification({
                 userId,
                 tieuDe: 'Đặt vé thành công! 🎬',
-                noiDung: `Bạn đã giữ ${seatIds.length} ghế cho phim "${tenphim}" tại ${tenrapphim}. Mã đơn: ${maDonDatVe}. Vui lòng thanh toán trong 10 phút.`,
+                noiDung: `Bạn đã giữ ${seatIds.length} ghế cho phim "${tenphim}" tại ${tenrapphim}. Mã đơn: ${maDonDatVe}. Vui lòng thanh toán trong 2 phút.`,
                 maDonDatVe,
                 maPhim: maphim
             });
@@ -268,12 +292,13 @@ exports.createBooking = async (req, res) => {
 
         res.status(201).json({ 
             status: 'success', 
-            message: 'Giữ ghế thành công! Vui lòng hoàn tất thanh toán trong 10 phút.', 
+            message: 'Giữ ghế thành công! Vui lòng hoàn tất thanh toán trong 2 phút.', 
             data: { 
                 maDonDatVe, 
                 maThanhToan,
                 totalPrice,
-                expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+                paymentUrl, // Trả về URL thanh toán VNPay nếu có
+                expiresAt: new Date(Date.now() + 2 * 60 * 1000).toISOString()
             } 
         });
 
@@ -422,4 +447,336 @@ exports.confirmPayment = async (req, res) => {
         client.release();
     }
 };
+
+// VNPay Return: Xử lý sau khi người dùng thanh toán xong và được redirect về Web/App
+exports.vnpayReturn = async (req, res) => {
+    try {
+        console.log("--- VNPAY RETURN RECEIVED ---", req.query);
+        const verify = vnpayService.verifyReturnUrl(req.query);
+        
+        if (verify.isSuccess) {
+            const { vnp_TxnRef, vnp_TransactionNo, vnp_ResponseCode } = req.query;
+            
+            if (vnp_ResponseCode === '00') {
+                // Cập nhật Database ngay tại đây làm phương án dự phòng cho IPN
+                await updateOrderAfterPayment(vnp_TxnRef, vnp_TransactionNo);
+                console.log(`VNPay Return Success: Order ${vnp_TxnRef} updated via Return URL.`);
+            }
+
+            res.send(`
+                <html>
+                    <body style="text-align: center; padding-top: 50px; font-family: sans-serif;">
+                        <h1 style="color: green;">Thanh toán VNPay thành công!</h1>
+                        <p>Đơn hàng ${vnp_TxnRef} đã được xử lý.</p>
+                        <p>Bạn có thể đóng trình duyệt này và quay lại ứng dụng.</p>
+                        <script>
+                            setTimeout(() => {
+                                window.close();
+                            }, 3000);
+                        </script>
+                    </body>
+                </html>
+            `);
+        } else {
+            res.send(`
+                <html>
+                    <body style="text-align: center; padding-top: 50px; font-family: sans-serif;">
+                        <h1 style="color: red;">Thanh toán VNPay thất bại</h1>
+                        <p>Lỗi: ${verify.message}</p>
+                        <a href="/">Quay về trang chủ</a>
+                    </body>
+                </html>
+            `);
+        }
+    } catch (e) {
+        console.error("VNPay Return Error:", e);
+        res.status(500).send("Lỗi xử lý kết quả VNPay");
+    }
+};
+
+// VNPay IPN: Xử lý thông báo server-to-server từ VNPay (QUAN TRỌNG)
+exports.vnpayIpn = async (req, res) => {
+    console.log("--- VNPAY IPN RECEIVED ---");
+    console.log("Query Params:", JSON.stringify(req.query, null, 2));
+    
+    const client = await db.connect();
+    try {
+        const verify = vnpayService.verifyReturnUrl(req.query);
+        console.log("Verify Result:", verify);
+        
+        if (!verify.isSuccess) {
+            console.error("VNPAY IPN Checksum Failed");
+            return res.status(200).json({ RspCode: '97', Message: 'Checksum failed' });
+        }
+
+        const { vnp_TxnRef, vnp_Amount, vnp_ResponseCode, vnp_TransactionNo } = req.query;
+        const maDonDatVe = vnp_TxnRef;
+        const amount = parseInt(vnp_Amount) / 100;
+
+        await client.query('BEGIN');
+
+        // 1. Kiểm tra đơn hàng có tồn tại không
+        const orderRes = await client.query('SELECT * FROM dondatve WHERE madondatve = $1', [maDonDatVe]);
+        if (orderRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(200).json({ RspCode: '01', Message: 'Order not found' });
+        }
+        const order = orderRes.rows[0];
+
+        // 2. Kiểm tra số tiền có khớp không
+        if (parseInt(order.tongtien) !== amount) {
+            await client.query('ROLLBACK');
+            return res.status(200).json({ RspCode: '04', Message: 'Invalid amount' });
+        }
+
+        // 3. Kiểm tra trạng thái đơn hàng (tránh xử lý trùng)
+        if (order.trangthai !== 'pending') {
+            await client.query('ROLLBACK');
+            return res.status(200).json({ RspCode: '02', Message: 'Order already confirmed' });
+        }
+
+        // 4. Cập nhật trạng thái dựa trên vnp_ResponseCode
+        if (vnp_ResponseCode === '00') {
+            await client.query('COMMIT');
+            // Dùng hàm chung để cập nhật
+            await updateOrderAfterPayment(maDonDatVe, vnp_TransactionNo);
+            return res.status(200).json({ RspCode: '00', Message: 'Confirm Success' });
+        } else {
+            // Thanh toán thất bại
+            await client.query(
+                "UPDATE thongtinthanhtoan SET trangthai = 'failed', paymentgatewaytransactionid = $1 WHERE madondatve = $2",
+                [vnp_TransactionNo, maDonDatVe]
+            );
+            await client.query('COMMIT');
+            return res.status(200).json({ RspCode: '00', Message: 'Confirm Success (Payment Failed)' });
+        }
+
+    } catch (e) {
+        if (client) await client.query('ROLLBACK');
+        console.error("VNPay IPN Error:", e);
+        res.status(500).json({ RspCode: '99', Message: 'Unknown error' });
+    } finally {
+        if (client) client.release();
+    }
+};
+
+// Helper function để xử lý các việc sau khi thanh toán thành công
+async function handlePostPaymentActions(maDonDatVe, userId) {
+    try {
+        // 1. Tạo thông báo
+        const notifInfoRes = await db.query(`
+            SELECT lc.maphim, p.tenphim, r.tenrapphim
+            FROM dondatve d
+            JOIN vexemphim v ON d.madondatve = v.madondatve
+            JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
+            JOIN phim p ON lc.maphim = p.maphim
+            JOIN phongrapphim pr ON lc.maphong = pr.maphong
+            JOIN rapphim r ON pr.marapphim = r.marapphim
+            WHERE d.madondatve = $1
+            LIMIT 1
+        `, [maDonDatVe]);
+        
+        if (notifInfoRes.rows.length > 0) {
+            const { maphim, tenphim, tenrapphim } = notifInfoRes.rows[0];
+            await createNotification({
+                userId,
+                tieuDe: 'Thanh toán thành công! 🎉',
+                noiDung: `Vé phim "${tenphim}" tại ${tenrapphim} đã được xác nhận. Mã đơn: ${maDonDatVe}. Chúc bạn xem phim vui vẻ!`,
+                maDonDatVe,
+                maPhim: maphim
+            });
+        }
+
+        // 2. Gửi Email
+        const bookingDetailsQuery = `
+            SELECT d.madondatve, d.tongtien, t.email,
+                   p.tenphim, p.poster_url,
+                   lc.ngaychieu, lc.giochieu,
+                   r.tenrapphim, pr.tenphong,
+                   string_agg(v.maghe, ', ') as seats
+            FROM dondatve d
+            JOIN thongtintaikhoan t ON d.id_khach = t.id_khach
+            JOIN vexemphim v ON d.madondatve = v.madondatve
+            JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
+            JOIN phim p ON lc.maphim = p.maphim
+            JOIN phongrapphim pr ON lc.maphong = pr.maphong
+            JOIN rapphim r ON pr.marapphim = r.marapphim
+            WHERE d.madondatve = $1
+            GROUP BY d.madondatve, d.tongtien, t.email, p.tenphim, p.poster_url, lc.ngaychieu, lc.giochieu, r.tenrapphim, pr.tenphong
+        `;
+        const detailsRes = await db.query(bookingDetailsQuery, [maDonDatVe]);
+        
+        if (detailsRes.rows.length > 0) {
+            const d = detailsRes.rows[0];
+            await emailService.sendBookingSuccessEmail(d.email, {
+                maDonDatVe: d.madondatve,
+                tenPhim: d.tenphim,
+                ngayChieu: d.ngaychieu instanceof Date ? d.ngaychieu.toLocaleDateString('vi-VN') : d.ngaychieu,
+                gioChieu: d.giochieu instanceof Date ? d.giochieu.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : d.giochieu,
+                tenRapPhim: d.tenrapphim,
+                tenPhong: d.tenphong,
+                seats: d.seats.split(', '),
+                tongTien: d.tongtien,
+                poster_url: d.poster_url
+            });
+        }
+    } catch (err) {
+        console.error('Lỗi xử lý hậu thanh toán:', err.message);
+    }
+}
+
+/**
+ * Xử lý khi MoMo điều hướng người dùng quay lại Website
+ */
+exports.momoReturn = async (req, res) => {
+    try {
+        console.log("--- MOMO RETURN ---", req.query);
+        const isValid = momoService.verifySignature(req.query);
+        
+        if (!isValid) {
+            return res.send("Chữ ký không hợp lệ!");
+        }
+
+        const { resultCode, orderId } = req.query;
+
+        if (resultCode == '0') {
+            res.send(`
+                <html>
+                    <body style="text-align: center; padding-top: 50px;">
+                        <h1 style="color: green;">Thanh toán MoMo thành công!</h1>
+                        <p>Đơn hàng ${orderId} đã được ghi nhận.</p>
+                        <p>Bạn có thể quay lại ứng dụng để xem vé.</p>
+                    </body>
+                </html>
+            `);
+        } else {
+            res.send(`
+                <html>
+                    <body style="text-align: center; padding-top: 50px;">
+                        <h1 style="color: red;">Thanh toán thất bại hoặc đã bị hủy</h1>
+                        <p>Mã lỗi: ${resultCode}</p>
+                        <a href="/">Quay về trang chủ</a>
+                    </body>
+                </html>
+            `);
+        }
+    } catch (error) {
+        console.error("MoMo Return Error:", error);
+        res.status(500).send("Lỗi hệ thống khi xử lý MoMo Return");
+    }
+};
+
+/**
+ * Xử lý IPN từ MoMo (Server-to-Server)
+ */
+exports.momoIpn = async (req, res) => {
+    try {
+        console.log("--- MOMO IPN ---", req.body);
+        const isValid = momoService.verifySignature(req.body);
+
+        if (!isValid) {
+            console.error("MoMo IPN Signature Invalid");
+            return res.status(400).json({ message: "Invalid signature" });
+        }
+
+        const { orderId, resultCode, amount, transId } = req.body;
+
+        if (resultCode == '0') {
+            // Thanh toán thành công -> Cập nhật DB
+            await updateOrderAfterPayment(orderId, transId);
+            console.log(`MoMo IPN Success: Order ${orderId} marked as paid.`);
+        } else {
+            console.log(`MoMo IPN Failed: Order ${orderId} with code ${resultCode}`);
+        }
+
+        // MoMo yêu cầu trả về HTTP 204 hoặc JSON
+        res.status(204).send();
+    } catch (error) {
+        console.error("MoMo IPN Error:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+
+// Kiểm tra trạng thái đơn hàng (Polling cho Frontend)
+exports.checkBookingStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await db.query(`
+            SELECT trangthai, thoidiemdat, tongtien 
+            FROM dondatve 
+            WHERE madondatve = $1
+        `, [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
+        }
+
+        const booking = result.rows[0];
+        
+        // Tính toán thời gian còn lại (giới hạn 10 phút = 600 giây)
+        const timeoutSeconds = 600;
+        const startTime = new Date(booking.thoidiemdat).getTime();
+        const now = new Date().getTime();
+        const elapsedSeconds = Math.floor((now - startTime) / 1000);
+        const remainingSeconds = Math.max(0, timeoutSeconds - elapsedSeconds);
+
+        res.json({
+            madondatve: id,
+            status: booking.trangthai, // 'pending', 'paid', hoặc 'cancelled'
+            amount: booking.tongtien,
+            remainingSeconds: remainingSeconds,
+            isExpired: remainingSeconds <= 0 && booking.trangthai === 'pending'
+        });
+    } catch (error) {
+        console.error("Check Status Error:", error);
+        res.status(500).json({ message: "Lỗi kiểm tra trạng thái" });
+    }
+};
+
+/**
+ * Hàm dùng chung để cập nhật trạng thái đơn hàng sau khi thanh toán thành công
+ */
+async function updateOrderAfterPayment(maDonDatVe, transId) {
+    const client = await db.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Cập nhật bảng thongtinthanhtoan
+        await client.query(
+            "UPDATE thongtinthanhtoan SET trangthai = 'success', paymentgatewaytransactionid = $1, thoidiemthanhtoan = CURRENT_TIMESTAMP WHERE madondatve = $2",
+            [transId, maDonDatVe]
+        );
+
+        // 2. Cập nhật trạng thái đơn hàng dondatve
+        await client.query(
+            "UPDATE dondatve SET trangthai = 'paid' WHERE madondatve = $1",
+            [maDonDatVe]
+        );
+
+        // 3. Kích hoạt tất cả vé thuộc đơn hàng này
+        await client.query(
+            "UPDATE vexemphim SET trangthai = 'active' WHERE madondatve = $1",
+            [maDonDatVe]
+        );
+
+        // Lấy ID khách để gửi thông báo
+        const orderRes = await client.query('SELECT id_khach FROM dondatve WHERE madondatve = $1', [maDonDatVe]);
+        const id_khach = orderRes.rows[0]?.id_khach;
+
+        await client.query('COMMIT');
+
+        // 4. Gửi thông báo và email (không chặn luồng chính)
+        if (id_khach) {
+            handlePostPaymentActions(maDonDatVe, id_khach).catch(err => console.error("Post Payment Actions Error:", err));
+        }
+
+        return true;
+    } catch (e) {
+        if (client) await client.query('ROLLBACK');
+        console.error("updateOrderAfterPayment Error:", e);
+        throw e;
+    } finally {
+        client.release();
+    }
+}
 
