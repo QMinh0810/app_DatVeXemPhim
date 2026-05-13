@@ -13,7 +13,6 @@ class SeatSelectionScreen extends StatefulWidget {
 }
 
 class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
-  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -21,18 +20,10 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<BookingViewModel>().fetchSeatMap();
     });
-    
-    // Thiết lập tự động làm mới mỗi 10 giây
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
-      if (mounted) {
-        context.read<BookingViewModel>().fetchSeatMap(silent: true);
-      }
-    });
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -43,11 +34,13 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   static const Color _brokenColor = Color(0xFFBDBDBD);
   static const Color _bookedColor = Color(0xFF9E9E9E);
   static const Color _selectedColor = Color(0xFF4CAF50);
+  static const Color _lockedByOtherColor = Color(0xFFFF9800); // Màu cam cho ghế người khác đang giữ
 
   Color _getSeatColor(SeatData seat, bool isSelected) {
     if (seat.isBroken) return _brokenColor;
     if (seat.isBooked) return _bookedColor;
-    if (isSelected) return _selectedColor;
+    if (seat.isLockedByMe || isSelected) return _selectedColor;
+    if (seat.isLockedByOther) return _lockedByOtherColor;
 
     switch (seat.loaighe) {
       case 'vip': return _vipColor;
@@ -69,7 +62,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
           decoration: BoxDecoration(
             color: seatColor,
             borderRadius: BorderRadius.circular(6),
-            border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
+            border: (seat.isLockedByMe || isSelected) ? Border.all(color: Colors.white, width: 2) : null,
           ),
           alignment: Alignment.center,
           child: Text(
@@ -94,7 +87,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
           decoration: BoxDecoration(
             color: seatColor,
             borderRadius: BorderRadius.circular(8),
-            border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
+            border: (seat.isLockedByMe || isSelected) ? Border.all(color: Colors.white, width: 2) : null,
           ),
           alignment: Alignment.center,
           child: Text(
@@ -241,6 +234,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
           _legendItem(_coupleColor, 'Couple'),
           _legendItem(_bookedColor, 'Đã đặt'),
           _legendItem(_selectedColor, 'Đang chọn'),
+          _legendItem(_lockedByOtherColor, 'Đang giữ'),
         ],
       ),
     );

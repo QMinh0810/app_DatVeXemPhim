@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../models/booking_model.dart';
 import '../models/movie_model.dart';
 import '../services/api_service.dart';
 import '../models/combo_model.dart';
+import '../services/socket_service.dart';
 
 /// Model đại diện cho 1 ghế ngồi từ API
 class SeatData {
@@ -11,7 +13,9 @@ class SeatData {
   final int soghe;         // Số ghế: 1, 2, 3...
   final String loaighe;    // 'normal', 'vip', 'couple', 'hỏng'
   final double hesogiaghe; // Hệ số nhân giá vé
-  final bool isBooked;     // Đã được đặt chưa
+  final bool isBooked;     // Đã được đặt chưa (trong DB)
+  final bool isLockedByMe; // Ghế mình đang giữ tạm (trong Redis)
+  final bool isLockedByOther; // Ghế người khác đang giữ (trong Redis)
 
   SeatData({
     required this.maghe,
@@ -20,6 +24,8 @@ class SeatData {
     required this.loaighe,
     required this.hesogiaghe,
     required this.isBooked,
+    this.isLockedByMe = false,
+    this.isLockedByOther = false,
   });
 
   /// Tên hiển thị: VD "A1", "B3"
@@ -39,11 +45,17 @@ class SeatData {
       loaighe: json['loaighe']?.toString().trim().toLowerCase() ?? 'hỏng', 
       hesogiaghe: double.tryParse(json['hesogiaghe']?.toString() ?? '1') ?? 1.0,
       isBooked: json['isBooked'] == true,
+      isLockedByMe: json['isLockedByMe'] == true,
+      isLockedByOther: json['isLockedByOther'] == true,
     );
   }
 }
 
+
+
 class BookingViewModel extends ChangeNotifier {
+  final SocketService _socketService = SocketService();
+  Timer? _heartbeatTimer;
   MovieModel? _selectedMovie;
   final List<String> _selectedSeats = [];
   List<String> _bookedSeats = [];
@@ -176,21 +188,189 @@ class BookingViewModel extends ChangeNotifier {
     _selectedTimeDisplay = timeDisplay;
     _selectedDateDisplay = dateDisplay;
     _selectedSeats.clear();
+    
+    // Khởi tạo socket khi chọn suất chiếu
+    initSocket(showtimeId);
+    
     notifyListeners();
+  }
+
+  // ============================================================
+  // SOCKET.IO LOGIC
+  // ============================================================
+
+  void initSocket(String showtimeId) {
+    _socketService.connect();
+    _socketService.clearListeners();
+    
+    // Join room
+    _socketService.joinShowtime(showtimeId);
+
+    // Lắng nghe trạng thái ban đầu
+    _socketService.onInitialState((data) {
+      final List lockedSeats = data['lockedSeats'] ?? [];
+      _selectedSeats.clear();
+      
+      for (var s in lockedSeats) {
+        final String sid = s['seatId'];
+        final bool isYours = s['isYours'] == true;
+        
+        if (isYours) {
+          _selectedSeats.add(sid);
+        }
+        // Update seatMap status
+        _updateSeatLockStatus(sid, isLockedByMe: isYours, isLockedByOther: !isYours);
+      }
+      notifyListeners();
+    });
+
+    // Lắng nghe khi có người khác lock ghế
+    _socketService.onSeatLocked((data) {
+      final String sid = data['seatId'];
+      _updateSeatLockStatus(sid, isLockedByOther: true);
+      notifyListeners();
+    });
+
+    // Lắng nghe khi ghế được giải phóng
+    _socketService.onSeatUnlocked((data) {
+      final String sid = data['seatId'];
+      _updateSeatLockStatus(sid, isLockedByMe: false, isLockedByOther: false);
+      
+      // Nếu là ghế mình đang chọn mà bị server unlock (hết hạn)
+      if (_selectedSeats.contains(sid)) {
+        _selectedSeats.remove(sid);
+      }
+      notifyListeners();
+    });
+
+    // Lắng nghe unlock hàng loạt
+    _socketService.onSeatsUnlockedBatch((data) {
+      final List sids = data['seatIds'] ?? [];
+      for (var sid in sids) {
+        _updateSeatLockStatus(sid, isLockedByMe: false, isLockedByOther: false);
+        _selectedSeats.remove(sid);
+      }
+      notifyListeners();
+    });
+
+    // Lắng nghe khi ghế được xác nhận mua thành công
+    _socketService.onSeatsConfirmed((data) {
+      final List sids = data['seatIds'] ?? [];
+      for (var sid in sids) {
+        _updateSeatConfirmed(sid);
+      }
+      notifyListeners();
+    });
+
+    // Xử lý khi mình lock thành công
+    _socketService.onLockSuccess((data) {
+      final String sid = data['seatId'];
+      if (!_selectedSeats.contains(sid)) {
+        _selectedSeats.add(sid);
+      }
+      _updateSeatLockStatus(sid, isLockedByMe: true);
+      notifyListeners();
+    });
+
+    // Xử lý khi mình lock thất bại (ví dụ tranh chấp)
+    _socketService.onLockFailed((data) {
+      final String sid = data['seatId'];
+      final String reason = data['reason'] ?? 'Ghế không khả dụng';
+      
+      _selectedSeats.remove(sid);
+      _errorMessage = reason;
+      
+      // Refresh lại seat map để đồng bộ
+      fetchSeatMap(silent: true);
+      notifyListeners();
+    });
+
+    // Bắt đầu Heartbeat để duy trì lock (mỗi 1 phút)
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      _socketService.sendHeartbeat(showtimeId);
+    });
+  }
+
+  void _updateSeatLockStatus(String maghe, {bool? isLockedByMe, bool? isLockedByOther}) {
+    final index = _seatMap.indexWhere((s) => s.maghe == maghe);
+    if (index != -1) {
+      final old = _seatMap[index];
+      _seatMap[index] = SeatData(
+        maghe: old.maghe,
+        mahangghe: old.mahangghe,
+        soghe: old.soghe,
+        loaighe: old.loaighe,
+        hesogiaghe: old.hesogiaghe,
+        isBooked: old.isBooked,
+        isLockedByMe: isLockedByMe ?? old.isLockedByMe,
+        isLockedByOther: isLockedByOther ?? old.isLockedByOther,
+      );
+    }
+  }
+
+  void _updateSeatConfirmed(String maghe) {
+    final index = _seatMap.indexWhere((s) => s.maghe == maghe);
+    if (index != -1) {
+      final old = _seatMap[index];
+      _seatMap[index] = SeatData(
+        maghe: old.maghe,
+        mahangghe: old.mahangghe,
+        soghe: old.soghe,
+        loaighe: old.loaighe,
+        hesogiaghe: old.hesogiaghe,
+        isBooked: true, // Chuyển hẳn sang trạng thái đã bán
+        isLockedByMe: false,
+        isLockedByOther: false,
+      );
+      if (!_bookedSeats.contains(maghe)) {
+        _bookedSeats.add(maghe);
+      }
+      _selectedSeats.remove(maghe);
+    }
+  }
+
+  @override
+  void dispose() {
+    _heartbeatTimer?.cancel();
+    _socketService.disconnect();
+    super.dispose();
   }
 
   void toggleSeat(String seatName) {
     if (_bookedSeats.contains(seatName)) return;
     
-    // Kiểm tra ghế hỏng
     final seatData = getSeatData(seatName);
-    if (seatData != null && seatData.isBroken) return;
-    
-    if (_selectedSeats.contains(seatName)) {
-      _selectedSeats.remove(seatName);
-    } else {
-      _selectedSeats.add(seatName);
+    if (seatData == null || seatData.isBroken) return;
+    if (seatData.isLockedByOther) {
+      _errorMessage = 'Ghế này đang được người khác giữ';
+      notifyListeners();
+      return;
     }
+
+    if (_selectedSeats.contains(seatName)) {
+      // 1. Phản hồi nhanh: Xóa khỏi danh sách chọn ngay
+      _selectedSeats.remove(seatName);
+      _updateSeatLockStatus(seatName, isLockedByMe: false);
+      
+      // 2. Gửi lệnh tới server
+      _socketService.unlockSeat(_selectedShowtimeId!, seatName);
+    } else {
+      // KIỂM TRA GIỚI HẠN 6 GHẾ
+      if (_selectedSeats.length >= 6) {
+        _errorMessage = 'Bạn chỉ được chọn tối đa 6 ghế';
+        notifyListeners();
+        return;
+      }
+
+      // 1. Phản hồi nhanh: Thêm vào danh sách chọn ngay (màu xanh)
+      _selectedSeats.add(seatName);
+      _updateSeatLockStatus(seatName, isLockedByMe: true);
+
+      // 2. Gửi lệnh tới server
+      _socketService.lockSeat(_selectedShowtimeId!, seatName);
+    }
+    _errorMessage = null; // Clear error cũ
     notifyListeners();
   }
 
