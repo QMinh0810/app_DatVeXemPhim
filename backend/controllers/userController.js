@@ -72,9 +72,10 @@ exports.getBookingHistory = async (req, res) => {
             SELECT d.madondatve, d.tongtien, d.trangthai as order_status, d.ngaydatve,
                    v.mavexemphim, v.giave as ticket_price, v.maghe, v.trangthai as ticket_status, v.qrcode,
                    (g.mahangghe || g.soghe) as tenghe,
-                   lc.ngaychieu, lc.giochieu,
+                   TO_CHAR(lc.ngaychieu, 'YYYY-MM-DD') as ngaychieu,
+                   TO_CHAR(lc.giochieu, 'HH24:MI') as giochieu,
                    p.tenphim, p.poster_url,
-                   r.tenrapphim, pr.tenphong
+                   r.tenrapphim, r.diachi, pr.tenphong
             FROM dondatve d
             JOIN vexemphim v ON d.madondatve = v.madondatve
             LEFT JOIN ghengoi g ON v.maghe = g.maghe
@@ -101,7 +102,8 @@ exports.getBookingHistory = async (req, res) => {
                     ngayDatVe: row.ngaydatve,
                     tenPhim: row.tenphim,
                     posterUrl: row.poster_url,
-                    tenRapPhim: row.tenraphim,
+                    tenRapPhim: row.tenrapphim,
+                    diaChi: row.diachi,
                     tenPhong: row.tenphong,
                     ngayChieu: row.ngaychieu,
                     gioChieu: row.giochieu,
