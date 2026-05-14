@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'ticket_detail_screen.dart';
 
 class OrderTicketsScreen extends StatelessWidget {
@@ -64,10 +65,12 @@ class OrderTicketsScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${order['tenRapPhim']} - ${order['tenPhong']}',
+                            '${order['tenRapPhim'] ?? 'N/A'} - ${order['tenPhong'] ?? ''}',
                             style: const TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.bold, fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          if (order['diaChi'] != null)
+                          if (order['diaChi'] != null && order['diaChi'].toString() != 'null')
                              Text(
                                order['diaChi'],
                                style: const TextStyle(color: Colors.grey, fontSize: 12),
@@ -84,9 +87,13 @@ class OrderTicketsScreen extends StatelessWidget {
                   children: [
                     const Icon(Icons.calendar_today, size: 16, color: Color(0xFFE51937)),
                     const SizedBox(width: 4),
-                    Text(
-                      '${order['gioChieu']} - ${order['ngayChieu']}',
-                      style: const TextStyle(color: Colors.grey, fontSize: 14),
+                    Expanded(
+                      child: Text(
+                        '${_formatTime(order['gioChieu'])} - ${_formatDate(order['ngayChieu'])}',
+                        style: const TextStyle(color: Colors.grey, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -234,6 +241,26 @@ class OrderTicketsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _formatDate(dynamic date) {
+    if (date == null || date.toString().isEmpty) return '';
+    try {
+      final dt = DateTime.parse(date.toString());
+      return DateFormat('dd/MM/yyyy').format(dt);
+    } catch (_) {
+      return date.toString().split('T')[0];
+    }
+  }
+
+  String _formatTime(dynamic time) {
+    if (time == null || time.toString().isEmpty) return '';
+    try {
+      final dt = DateTime.parse(time.toString());
+      return DateFormat('HH:mm').format(dt);
+    } catch (_) {
+      return time.toString();
+    }
   }
 
   bool _checkIfUpcoming(dynamic date, dynamic time) {

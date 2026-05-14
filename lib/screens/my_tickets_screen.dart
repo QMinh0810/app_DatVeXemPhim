@@ -160,12 +160,16 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                             children: [
                               Icon(Icons.access_time_filled, size: 14, color: isUpcoming ? const Color(0xFFE51937) : Colors.grey),
                               const SizedBox(width: 6),
-                              Text(
-                                '${ticket['gioChieu']} - ${ticket['ngayChieu']}',
-                                style: TextStyle(
-                                  color: isUpcoming ? const Color(0xFFE51937) : Colors.grey,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
+                              Expanded(
+                                child: Text(
+                                  '${_formatTime(ticket['gioChieu'])} - ${_formatDate(ticket['ngayChieu'])}',
+                                  style: TextStyle(
+                                    color: isUpcoming ? const Color(0xFFE51937) : Colors.grey,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -178,7 +182,7 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  '${ticket['tenRapPhim']} | ${ticket['diaChi'] ?? ''}',
+                                  '${ticket['tenRapPhim'] ?? 'N/A'} | ${ticket['diaChi'] != null && ticket['diaChi'].toString() != 'null' ? ticket['diaChi'] : ''}',
                                   style: const TextStyle(color: Colors.black54, fontSize: 13),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -230,5 +234,24 @@ class _MyTicketsScreenState extends State<MyTicketsScreen> {
         },
       ),
     );
+  }
+  String _formatDate(dynamic date) {
+    if (date == null || date.toString().isEmpty) return '';
+    try {
+      final dt = DateTime.parse(date.toString());
+      return DateFormat('dd/MM/yyyy').format(dt);
+    } catch (_) {
+      return date.toString().split('T')[0];
+    }
+  }
+
+  String _formatTime(dynamic time) {
+    if (time == null || time.toString().isEmpty) return '';
+    try {
+      final dt = DateTime.parse(time.toString());
+      return DateFormat('HH:mm').format(dt);
+    } catch (_) {
+      return time.toString();
+    }
   }
 }

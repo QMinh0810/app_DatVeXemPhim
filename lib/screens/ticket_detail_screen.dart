@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:intl/intl.dart';
 
 class TicketDetailScreen extends StatelessWidget {
   final Map<String, dynamic> ticket;
@@ -110,7 +111,7 @@ class TicketDetailScreen extends StatelessWidget {
                   style: const TextStyle(color: Color(0xFFE51937), fontWeight: FontWeight.w600, fontSize: 13),
                 ),
               ),
-              if (order['diaChi'] != null) ...[
+              if (order['diaChi'] != null && order['diaChi'].toString() != 'null') ...[
                 const SizedBox(height: 6),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -175,8 +176,8 @@ class TicketDetailScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildInfoItem('Ngày', order['ngayChieu'] ?? ''),
-              _buildInfoItem('Giờ', order['gioChieu'] ?? ''),
+              _buildInfoItem('Ngày', _formatDate(order['ngayChieu'])),
+              _buildInfoItem('Giờ', _formatTime(order['gioChieu'])),
               _buildInfoItem('Phòng', order['tenPhong'] ?? ''),
             ],
           ),
@@ -226,5 +227,24 @@ class TicketDetailScreen extends StatelessWidget {
         Text(value, style: const TextStyle(color: Color(0xFF1A1A1A), fontWeight: FontWeight.bold, fontSize: 15)),
       ],
     );
+  }
+  String _formatDate(dynamic date) {
+    if (date == null || date.toString().isEmpty) return '';
+    try {
+      final dt = DateTime.parse(date.toString());
+      return DateFormat('dd/MM/yyyy').format(dt);
+    } catch (_) {
+      return date.toString().split('T')[0];
+    }
+  }
+
+  String _formatTime(dynamic time) {
+    if (time == null || time.toString().isEmpty) return '';
+    try {
+      final dt = DateTime.parse(time.toString());
+      return DateFormat('HH:mm').format(dt);
+    } catch (_) {
+      return time.toString();
+    }
   }
 }
