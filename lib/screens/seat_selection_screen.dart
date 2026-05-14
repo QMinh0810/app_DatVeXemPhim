@@ -120,100 +120,106 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
             elevation: 1,
             iconTheme: const IconThemeData(color: Colors.black),
           ),
-          body: Column(
-            children: [
-              // Màn hình
-              const SizedBox(height: 20),
-              const Center(child: Text('MÀN HÌNH', style: TextStyle(fontSize: 10, color: Colors.grey, letterSpacing: 8))),
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 60),
-                height: 4,
-                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-              ),
-              
-              const SizedBox(height: 30),
-
-              // Sơ đồ ghế
-              Expanded(
-                child: InteractiveViewer(
-                  minScale: 0.8,
-                  maxScale: 2.5,
-                  child: SingleChildScrollView(
-                    // [BUG FIX] Sửa lỗi giao diện: Thêm SingleChildScrollView
-                    // Lý do: Trên các màn hình nhỏ (hoặc số lượng hàng ghế G, H, I.. nhiều),
-                    // kích thước dọc của lưới ghế lớn hơn vùng Expanded dẫn đến lỗi "BOTTOM OVERFLOWED".
-                    // SingleChildScrollView giúp nội dung ghế có thể linh động cuộn dọc (scroll) thay vì bị tràn viền.
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Column(
-                      children: rows.map((rowName) {
-                        // Kiểm tra xem hàng này có phải hàng ghế đôi không dựa trên dữ liệu thực tế
-                        bool isCoupleRow = false;
-                        for (int col = 1; col <= maxCols; col++) {
-                          final seat = bookingVM.getSeatAt(rowName, col);
-                          if (seat != null && seat.loaighe == 'couple') {
-                            isCoupleRow = true;
-                            break;
+          body: PopScope(
+            canPop: true,
+            onPopInvokedWithResult: (didPop, result) {
+              if (didPop) {
+                // Khi người dùng nhấn nút Back hoặc vuốt để quay lại
+                // Giải phóng các ghế đã chọn để người khác có thể chọn ngay
+                bookingVM.releaseSeats();
+              }
+            },
+            child: Column(
+              children: [
+                // Màn hình
+                const SizedBox(height: 20),
+                const Center(child: Text('MÀN HÌNH', style: TextStyle(fontSize: 10, color: Colors.grey, letterSpacing: 8))),
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 60),
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                ),
+                
+                const SizedBox(height: 30),
+  
+                // Sơ đồ ghế
+                Expanded(
+                  child: InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 2.5,
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Column(
+                        children: rows.map((rowName) {
+                          // Kiểm tra xem hàng này có phải hàng ghế đôi không dựa trên dữ liệu thực tế
+                          bool isCoupleRow = false;
+                          for (int col = 1; col <= maxCols; col++) {
+                            final seat = bookingVM.getSeatAt(rowName, col);
+                            if (seat != null && seat.loaighe == 'couple') {
+                              isCoupleRow = true;
+                              break;
+                            }
                           }
-                        }
-
-                        return Row(
-                          children: [
-                            // Label trái
-                            SizedBox(width: 20, child: Text(rowName, style: const TextStyle(fontSize: 12, color: Colors.grey))),
-                            
-                            // Các cột ghế
-                            ...(isCoupleRow 
-                              ? List.generate(maxCols ~/ 2, (index) {
-                                  int col = index + 1;
-                                  final seat = bookingVM.getSeatAt(rowName, col);
-                                  
-                                  Widget seatWidget = seat != null 
-                                      ? _buildCoupleSeat(context, bookingVM, seat) 
-                                      : const SizedBox();
-                                      
-                                  // Chèn lối đi sau ghế thứ 2
-                                  if (index == 1) { 
-                                    return [
-                                      Expanded(flex: 2, child: seatWidget),
-                                      const SizedBox(width: 24),
-                                    ];
-                                  }
-                                  return [Expanded(flex: 2, child: seatWidget)];
-                                }).expand((x) => x).toList()
-                              : List.generate(maxCols, (colIndex) {
-                                  int col = colIndex + 1;
-                                  final seat = bookingVM.getSeatAt(rowName, col);
-                                  
-                                  Widget seatWidget = seat != null 
-                                      ? _buildSeat(context, bookingVM, seat) 
-                                      : const SizedBox();
-                                  
-                                  // Chèn lối đi ở giữa (sau cột 4)
-                                  if (col == 4) {
-                                    return [
-                                      Expanded(child: seatWidget),
-                                      const SizedBox(width: 24), // Lối đi giữa
-                                    ];
-                                  }
-
-                                  return [Expanded(child: seatWidget)];
-                                }).expand((x) => x).toList()
-                            ),
-
-                            // Label phải
-                            SizedBox(width: 20, child: Text(rowName, textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, color: Colors.grey))),
-                          ],
-                        );
-                      }).toList(),
+  
+                          return Row(
+                            children: [
+                              // Label trái
+                              SizedBox(width: 20, child: Text(rowName, style: const TextStyle(fontSize: 12, color: Colors.grey))),
+                              
+                              // Các cột ghế
+                              ...(isCoupleRow 
+                                ? List.generate(maxCols ~/ 2, (index) {
+                                    int col = index + 1;
+                                    final seat = bookingVM.getSeatAt(rowName, col);
+                                    
+                                    Widget seatWidget = seat != null 
+                                        ? _buildCoupleSeat(context, bookingVM, seat) 
+                                        : const SizedBox();
+                                        
+                                    // Chèn lối đi sau ghế thứ 2
+                                    if (index == 1) { 
+                                      return [
+                                        Expanded(flex: 2, child: seatWidget),
+                                        const SizedBox(width: 24),
+                                      ];
+                                    }
+                                    return [Expanded(flex: 2, child: seatWidget)];
+                                  }).expand((x) => x).toList()
+                                : List.generate(maxCols, (colIndex) {
+                                    int col = colIndex + 1;
+                                    final seat = bookingVM.getSeatAt(rowName, col);
+                                    
+                                    Widget seatWidget = seat != null 
+                                        ? _buildSeat(context, bookingVM, seat) 
+                                        : const SizedBox();
+                                    
+                                    // Chèn lối đi ở giữa (sau cột 4)
+                                    if (col == 4) {
+                                      return [
+                                        Expanded(child: seatWidget),
+                                        const SizedBox(width: 24), // Lối đi giữa
+                                      ];
+                                    }
+  
+                                    return [Expanded(child: seatWidget)];
+                                  }).expand((x) => x).toList()
+                              ),
+  
+                              // Label phải
+                              SizedBox(width: 20, child: Text(rowName, textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, color: Colors.grey))),
+                            ],
+                          );
+                        }).toList(),
+                      ),
                     ),
                   ),
                 ),
               ),
+  
+                _buildLegend(),
+              ],
             ),
-
-              _buildLegend(),
-            ],
           ),
           bottomNavigationBar: _buildBottomBar(bookingVM),
         );
