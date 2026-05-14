@@ -337,6 +337,24 @@ class BookingViewModel extends ChangeNotifier {
     super.dispose();
   }
 
+  /// Giải phóng tất cả ghế đang chọn và ngắt kết nối socket (gọi khi thoát màn hình chọn ghế)
+  void releaseSeats() {
+    print('🧹 [BookingViewModel] Giải phóng ghế và ngắt kết nối socket');
+    _heartbeatTimer?.cancel();
+    
+    // Nếu có showtimeId, gửi unlock từng cái (hoặc server tự xử lý khi disconnect)
+    // Ở đây ta chọn disconnect để server tự dọn dẹp theo logic auto-unlock
+    _socketService.disconnect();
+    
+    // Xóa danh sách ghế đang chọn tại local
+    for (var seatId in _selectedSeats) {
+      _updateSeatLockStatus(seatId, isLockedByMe: false);
+    }
+    _selectedSeats.clear();
+    
+    notifyListeners();
+  }
+
   void toggleSeat(String seatName) {
     if (_bookedSeats.contains(seatName)) return;
     
@@ -555,6 +573,8 @@ class BookingViewModel extends ChangeNotifier {
   }
 
   void resetBooking() {
+    _heartbeatTimer?.cancel();
+    _socketService.disconnect();
     _selectedSeats.clear();
     _bookedSeats.clear();
     _seatMap.clear();
