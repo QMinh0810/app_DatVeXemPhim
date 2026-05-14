@@ -1,91 +1,77 @@
-const db = require('../config/db');
-const { createNotification } = require('./notificationHelper');
+const redis = require('./redisClient');
+const seatLockService = require('./seatLockService');
 
 /**
- * Hàm giải phóng các ghế (vé) và đơn hàng ở trạng thái 'pending'
- * đã quá thời gian giữ ghế (2 phút).
- * Đồng thời gửi thông báo in-app cho người dùng bị ảnh hưởng.
+ * Cleanup Job mới: Scan Redis để tìm ghế hết hạn lock
+ * 
+ * Redis TTL tự động xóa keys khi hết hạn. Tuy nhiên, Upstash free tier
+ * không hỗ trợ Keyspace Notifications. Do đó, job này scan mỗi 30 giây
+ * để phát hiện session hết hạn và broadcast Socket.IO thông báo ghế đã giải phóng.
+ *
+ * LƯU Ý: Vì dùng TTL, ghế sẽ tự unlock khi key hết hạn. Job này chỉ:
+ * 1. Log cho monitoring
+ * 2. Dọn dẹp user:seats keys nếu seat keys đã expire
  */
-const releaseExpiredSeats = async () => {
+const cleanupExpiredSessions = async () => {
     try {
-        // 1. Lấy danh sách đơn hàng sắp bị huỷ TRƯỚC KHI cập nhật
-        //    để có thể gửi thông báo kèm thông tin chi tiết
-        const expiredOrdersInfoRes = await db.query(`
-            SELECT DISTINCT
-                d.madondatve,
-                d.id_khach,
-                d.tongtien,
-                p.maphim,
-                p.tenphim,
-                r.tenrapphim
-            FROM vexemphim v
-            JOIN dondatve d ON v.madondatve = d.madondatve
-            JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
-            JOIN phim p ON lc.maphim = p.maphim
-            JOIN phongrapphim pr ON lc.maphong = pr.maphong
-            JOIN rapphim r ON pr.marapphim = r.marapphim
-            WHERE v.trangthai = 'pending'
-              AND v.thoigianhethan < CURRENT_TIMESTAMP
-              AND d.trangthai = 'pending'
-        `);
+        // Scan tất cả booking sessions đang tồn tại
+        const sessionKeys = await seatLockService.scanKeys('booking:session:*');
+        
+        if (sessionKeys.length > 0) {
+            console.log(`[CleanupJob] ${sessionKeys.length} booking session(s) đang active trong Redis`);
+        }
 
-        // 2. Cập nhật trạng thái Vé (vexemphim) quá hạn sang 'cancelled'
-        const expiredTicketsRes = await db.query(`
-            UPDATE vexemphim 
-            SET trangthai = 'cancelled' 
-            WHERE trangthai = 'pending' 
-              AND thoigianhethan < CURRENT_TIMESTAMP
-            RETURNING madondatve
-        `);
+        // Scan user seat tracking keys để dọn dẹp orphan
+        const userSeatKeys = await seatLockService.scanKeys('user:seats:*');
+        
+        for (const userKey of userSeatKeys) {
+            const seatIds = await redis.smembers(userKey);
+            
+            if (seatIds.length === 0) {
+                // Key rỗng → xóa
+                await redis.del(userKey);
+                continue;
+            }
 
-        if (expiredTicketsRes.rowCount > 0) {
-            console.log(`[CleanupJob] Đã hủy ${expiredTicketsRes.rowCount} vé quá hạn.`);
+            // Lấy showtimeId từ key pattern: user:seats:{showtimeId}:{userId}
+            const parts = userKey.split(':');
+            const showtimeId = parts[2];
 
-            // 3. Cập nhật trạng thái Đơn hàng (dondatve) sang 'cancelled'
-            //    nếu tất cả vé của đơn hàng đó đã bị hủy
-            const orderIds = [...new Set(expiredTicketsRes.rows.map(r => r.madondatve))];
-
-            for (const orderId of orderIds) {
-                // Kiểm tra xem đơn hàng còn vé pending chưa hết hạn không
-                const checkStillPending = await db.query(`
-                    SELECT 1 FROM vexemphim 
-                    WHERE madondatve = $1 AND trangthai = 'pending'
-                `, [orderId]);
-
-                if (checkStillPending.rowCount === 0) {
-                    await db.query(`
-                        UPDATE dondatve 
-                        SET trangthai = 'cancelled' 
-                        WHERE madondatve = $1 AND trangthai = 'pending'
-                    `, [orderId]);
-                    console.log(`[CleanupJob] Đã hủy đơn hàng ${orderId} do hết hạn giữ ghế.`);
-
-                    // 4. Gửi thông báo in-app cho người dùng
-                    const orderInfo = expiredOrdersInfoRes.rows.find(r => r.madondatve === orderId);
-                    if (orderInfo) {
-                        const tongTienFormat = Number(orderInfo.tongtien).toLocaleString('vi-VN');
-                        await createNotification({
-                            userId: orderInfo.id_khach,
-                            tieuDe: 'Đơn hàng đã bị huỷ (Hết hạn) ⏳',
-                            noiDung: `Đơn hàng ${orderId} cho phim "${orderInfo.tenphim}" tại ${orderInfo.tenrapphim} đã bị huỷ do bạn chưa thanh toán đúng hạn. Số tiền hoàn lại: ${tongTienFormat} VNĐ.`,
-                            maDonDatVe: orderId,
-                            maPhim: orderInfo.maphim
-                        });
-                    }
+            // Kiểm tra xem các seat lock keys có còn tồn tại không
+            let allExpired = true;
+            for (const seatId of seatIds) {
+                const exists = await redis.exists(`seat:lock:${showtimeId}:${seatId}`);
+                if (exists) {
+                    allExpired = false;
+                    break;
                 }
+            }
+
+            if (allExpired) {
+                // Tất cả seat locks đã expire nhưng user:seats key chưa → dọn dẹp
+                await redis.del(userKey);
+                console.log(`[CleanupJob] Dọn dẹp orphan user:seats key cho showtime ${showtimeId}`);
+
+                // Broadcast ghế đã được giải phóng
+                try {
+                    const io = require('../server').io;
+                    if (io && io._seatHelpers) {
+                        io._seatHelpers.broadcastSeatsUnlocked(showtimeId, seatIds);
+                    }
+                } catch {}
             }
         }
     } catch (e) {
-        console.error('[CleanupJob] Lỗi khi thực hiện dọn dẹp:', e.message);
+        console.error('[CleanupJob] Lỗi cleanup:', e.message);
     }
 };
 
-// Khởi chạy Job mỗi 1 phút (60000ms)
+// Khởi chạy Job mỗi 30 giây
 const startCleanupJob = () => {
-    console.log('🚀 Cleanup Job đã được kích hoạt (Chạy mỗi 1 phút)');
-    setInterval(releaseExpiredSeats, 60000);
-    // Chạy thử lần đầu ngay khi khởi động
-    releaseExpiredSeats();
+    console.log('🧹 Cleanup Job đã được kích hoạt (Chạy mỗi 30 giây — Redis mode)');
+    setInterval(cleanupExpiredSessions, 30000);
+    // Chạy lần đầu sau 5 giây (chờ Redis kết nối xong)
+    setTimeout(cleanupExpiredSessions, 5000);
 };
 
 module.exports = { startCleanupJob };

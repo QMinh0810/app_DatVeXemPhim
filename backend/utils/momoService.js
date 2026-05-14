@@ -67,17 +67,37 @@ const createPaymentUrl = async (orderId, amount, orderInfo) => {
  * Hàm xác minh chữ ký từ MoMo gửi về (Redirect hoặc IPN)
  */
 const verifySignature = (data) => {
-    const { partnerCode, orderId, requestId, amount, orderInfo, orderType, transId, resultCode, message, payType, responseTime, extraData, signature } = data;
+    const { 
+        partnerCode = '', 
+        orderId = '', 
+        requestId = '', 
+        amount = '', 
+        orderInfo = '', 
+        orderType = '', 
+        transId = '', 
+        resultCode = '', 
+        message = '', 
+        payType = '', 
+        responseTime = '', 
+        extraData = '', 
+        signature 
+    } = data;
     
     const accessKey = process.env.MOMO_ACCESS_KEY;
     const secretKey = process.env.MOMO_SECRET_KEY;
 
-    const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&message=${message}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&payType=${payType}&requestId=${requestId}&responseTime=${responseTime}&resultCode=${resultCode}&transId=${transId}`;
+    const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&message=${message}&orderId=${orderId}&orderInfo=${orderInfo}&orderType=${orderType}&partnerCode=${partnerCode}&payType=${payType}&requestId=${requestId}&responseTime=${responseTime}&resultCode=${resultCode}&transId=${transId}`;
+
+    console.log("--- MOMO VERIFY SIGNATURE ---");
+    console.log("Raw Signature String:", rawSignature);
 
     const checkSignature = crypto
         .createHmac('sha256', secretKey)
         .update(rawSignature)
         .digest('hex');
+
+    console.log("Calculated Signature:", checkSignature);
+    console.log("Received Signature:", signature);
 
     return checkSignature === signature;
 };

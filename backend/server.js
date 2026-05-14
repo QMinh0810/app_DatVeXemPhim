@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const db = require('./config/db');
 
@@ -15,6 +17,22 @@ const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Tạo HTTP server để Socket.IO dùng chung cổng với Express
+const server = http.createServer(app);
+
+// Khởi tạo Socket.IO
+const io = new Server(server, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST'],
+    },
+    // Cho phép cả polling và websocket (tương thích ngrok)
+    transports: ['websocket', 'polling'],
+});
+
+// Export io để các controller có thể dùng
+module.exports.io = io;
 
 // Middleware
 app.use(cors());
@@ -59,9 +77,15 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
+// Khởi tạo Socket.IO seat handler
+const { initSeatSocket } = require('./socket/seatSocket');
+initSeatSocket(io);
+
 const { startCleanupJob } = require('./utils/cleanupJob');
-// Lắng nghe cổng Mạng
-app.listen(PORT, () => {
+
+// Lắng nghe trên HTTP server (thay vì app.listen)
+server.listen(PORT, () => {
   console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
-  startCleanupJob(); // Kích hoạt dọn dẹp ghế hết hạn
+  console.log(`🔌 Socket.IO sẵn sàng tại ws://localhost:${PORT}/booking`);
+  startCleanupJob();
 });

@@ -24,4 +24,7 @@ router.post('/momo-ipn', bookingController.momoIpn); // MoMo IPN dùng POST
 // Tuyến kiểm tra trạng thái thanh toán (Cho polling)
 router.get('/status/:id', bookingController.checkBookingStatus);
 
+// Tuyến hủy đơn hàng chủ động từ phía người dùng
+router.post('/:id/cancel', verifyToken, bookingController.cancelBooking);
+
 module.exports = router;

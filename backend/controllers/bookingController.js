@@ -3,6 +3,9 @@ const emailService = require('../utils/emailService');
 const { createNotification } = require('../utils/notificationHelper');
 const vnpayService = require('../utils/vnpayService');
 const momoService = require('../utils/momoService');
+const seatLockService = require('../utils/seatLockService');
+// io được require lazy để tránh circular dependency
+function getIO() { try { return require('../server').io; } catch { return null; } }
 
 // Lấy danh sách Rạp phim
 exports.getTheaters = async (req, res) => {
@@ -36,22 +39,43 @@ exports.getTheaterRoomsAndSeats = async (req, res) => {
         // 2. Lấy danh sách ghế của phòng đó
         const seatsRes = await db.query('SELECT * FROM ghengoi WHERE maphong = $1 ORDER BY mahangghe, soghe', [showtime.maphong]);
         
-        // 3. Lấy danh sách ghế ĐÃ ĐƯỢC ĐẶT hoặc ĐANG GIỮ chưa hết hạn
+        // 3. Lấy ghế ĐÃ ĐẶT từ DB (chỉ active)
         const queryBookedSeats = `
             SELECT v.maghe 
             FROM vexemphim v
             WHERE v.malichchieu = $1 
-              AND v.trangthai != 'cancelled'
-              AND (v.trangthai = 'active' OR v.thoigianhethan > CURRENT_TIMESTAMP)
+              AND v.trangthai = 'active'
         `;
         const bookedSeatsRes = await db.query(queryBookedSeats, [showtimeId]);
         const bookedSeatIds = bookedSeatsRes.rows.map(row => row.maghe);
 
-        // Map trạng thái ghế
-        const seats = seatsRes.rows.map(seat => ({
-            ...seat,
-            isBooked: bookedSeatIds.includes(seat.maghe)
-        }));
+        // 4. Lấy ghế đang bị LOCK trong Redis (đang trong quá trình chọn)
+        let lockedSeats = [];
+        try {
+            lockedSeats = await seatLockService.getLockedSeats(showtimeId);
+        } catch (redisErr) {
+            console.warn('[Redis] Không lấy được locked seats, bỏ qua:', redisErr.message);
+        }
+        const lockedMap = {};
+        lockedSeats.forEach(ls => { lockedMap[ls.seatId] = ls.lockedBy; });
+
+        // Lấy userId từ token nếu có (để phân biệt ghế mình lock vs người khác)
+        const currentUserId = req.user ? String(req.user.id) : null;
+
+        // 5. Map trạng thái ghế (merge DB + Redis)
+        const seats = seatsRes.rows.map(seat => {
+            const seatId = seat.maghe;
+            const isBookedDB = bookedSeatIds.includes(seatId);
+            const lockedBy = lockedMap[seatId];
+            const isLockedByMe = currentUserId && lockedBy === currentUserId;
+            const isLockedByOther = !!lockedBy && !isLockedByMe;
+            return {
+                ...seat,
+                isBooked: isBookedDB || isLockedByOther, // Ghế DB active OR bị người khác lock
+                isLockedByMe,     // Ghế mình đang giữ (màu xanh chọn)
+                isLockedByOther,  // Ghế người khác đang giữ (màu cam)
+            };
+        });
 
         res.json({
             status: 'success',
@@ -113,80 +137,81 @@ exports.getShowtimes = async (req, res) => {
     }
 };
 
-// API: Tạo Đơn Đặt Vé (Bao gồm Xử lý Transaction khóa ghế)
+// API: Tạo Đơn Đặt Vé (Redis-based — KHÔNG write DB cho đến khi thanh toán thành công)
 exports.createBooking = async (req, res) => {
-    // Để gọi được hàm này, User bắt buộc phải truyền Token (lấy từ Header)
-    // Giả sử middleware đã inject `req.user`
-    
-    // Khởi tạo Transaction (Bảo toàn dữ liệu)
-    const client = await db.connect();
-
     try {
         const { showtimeId, seatIds, paymentMethod, concessions } = req.body;
-        // Lấy userId từ Token (Bắt buộc)
-        const userId = req.user.id; 
+        const userId = String(req.user.id);
 
         if (!seatIds || seatIds.length === 0) {
             return res.status(400).json({ status: 'error', message: 'Vui lòng chọn ít nhất 1 ghế' });
         }
 
-        await client.query('BEGIN'); // Bắt đầu lock DB
-
-        // 1. Kiểm tra ghế đã ai đặt chưa hoặc có ai đang giữ (Pending) chưa hết hạn
-        const checkSeatsQuery = `
-            SELECT g.maghe 
-            FROM vexemphim v
-            JOIN ghengoi g ON v.maghe = g.maghe
-            WHERE v.malichchieu = $1 
-              AND g.maghe = ANY($2::varchar[]) 
-              AND v.trangthai != 'cancelled'
-              AND (v.trangthai = 'active' OR v.thoigianhethan > CURRENT_TIMESTAMP)
-        `;
-        const checkSeatsRes = await client.query(checkSeatsQuery, [showtimeId, seatIds]);
-        
-        if (checkSeatsRes.rows.length > 0) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ status: 'error', message: 'Một số ghế bạn chọn đã có người đặt hoặc đang được giữ. Vui lòng chọn ghế khác!' });
+        if (seatIds.length > 6) {
+            return res.status(400).json({ status: 'error', message: 'Bạn chỉ được chọn tối đa 6 ghế' });
         }
 
-        // 2. Tính tiền (dựa vào giaVe của Lịch chiếu & heSoGiaGhe)
-        const showtimeRes = await client.query('SELECT giave FROM lichchieu WHERE malichchieu = $1', [showtimeId]);
+        // 1. Xác minh tất cả ghế đang được lock bởi user này trong Redis
+        const userLockedSeats = await seatLockService.getUserLockedSeats(showtimeId, userId);
+        const missingLocks = seatIds.filter(id => !userLockedSeats.includes(id));
+        
+        if (missingLocks.length > 0) {
+            return res.status(400).json({ 
+                status: 'error', 
+                message: `Ghế ${missingLocks.join(', ')} chưa được lock. Vui lòng chọn lại ghế!` 
+            });
+        }
+
+        // 2. Kiểm tra ghế trong DB (đã active chưa — double check)
+        const checkSeatsQuery = `
+            SELECT v.maghe FROM vexemphim v
+            WHERE v.malichchieu = $1 AND v.maghe = ANY($2::varchar[]) AND v.trangthai = 'active'
+        `;
+        const checkSeatsRes = await db.query(checkSeatsQuery, [showtimeId, seatIds]);
+        if (checkSeatsRes.rows.length > 0) {
+            return res.status(400).json({ status: 'error', message: 'Một số ghế đã được đặt. Vui lòng chọn ghế khác!' });
+        }
+
+        // 3. Tính tiền vé (READ-ONLY từ DB)
+        const showtimeRes = await db.query('SELECT giave FROM lichchieu WHERE malichchieu = $1', [showtimeId]);
+        if (showtimeRes.rows.length === 0) {
+            return res.status(404).json({ status: 'error', message: 'Không tìm thấy suất chiếu' });
+        }
         const basePrice = showtimeRes.rows[0].giave;
 
-        const seatRes = await client.query('SELECT maghe, hesogiaghe FROM ghengoi WHERE maghe = ANY($1::varchar[])', [seatIds]);
-        
+        const seatRes = await db.query('SELECT maghe, hesogiaghe FROM ghengoi WHERE maghe = ANY($1::varchar[])', [seatIds]);
         if (seatRes.rows.length !== seatIds.length) {
-            await client.query('ROLLBACK');
             return res.status(400).json({ status: 'error', message: 'Một hoặc nhiều ghế không hợp lệ.' });
         }
 
         let ticketPriceTotal = 0;
+        const seatPrices = {};
         for (let sId of seatIds) {
             let seat = seatRes.rows.find(s => String(s.maghe).trim() === String(sId).trim());
             if (!seat) {
-                await client.query('ROLLBACK');
                 return res.status(400).json({ status: 'error', message: `Không tìm thấy thông tin giá cho ghế: ${sId}` });
             }
-            ticketPriceTotal += (basePrice * seat.hesogiaghe);
+            const price = basePrice * seat.hesogiaghe;
+            ticketPriceTotal += price;
+            seatPrices[sId] = price;
         }
 
-        // 2.5 Tính tiền bắp nước (concessions)
+        // 4. Tính tiền bắp nước (READ-ONLY từ DB)
         let concessionPrice = 0;
         let concessionDetails = [];
-
         if (concessions && concessions.length > 0) {
             for (let c of concessions) {
-                if (c.itemId) {
-                    const itemRes = await client.query('SELECT price FROM items WHERE item_id = $1', [c.itemId]);
-                    if (itemRes.rows.length > 0) {
-                        const price = itemRes.rows[0].price;
+                if (c.comboId) {
+                    const comboRes = await db.query('SELECT price FROM combos WHERE combo_id = $1', [c.comboId]);
+                    if (comboRes.rows.length > 0) {
+                        const price = comboRes.rows[0].price;
                         concessionPrice += price * c.quantity;
                         concessionDetails.push({ ...c, price });
                     }
-                } else if (c.comboId) {
-                    const comboRes = await client.query('SELECT price FROM combos WHERE combo_id = $1', [c.comboId]);
-                    if (comboRes.rows.length > 0) {
-                        const price = comboRes.rows[0].price;
+                } else if (c.itemId) {
+                    const itemRes = await db.query('SELECT price FROM items WHERE item_id = $1', [c.itemId]);
+                    if (itemRes.rows.length > 0) {
+                        const price = itemRes.rows[0].price;
                         concessionPrice += price * c.quantity;
                         concessionDetails.push({ ...c, price });
                     }
@@ -196,118 +221,63 @@ exports.createBooking = async (req, res) => {
 
         let totalPrice = ticketPriceTotal + concessionPrice;
 
-        // 3. Sinh mã Đơn Hàng
+        // 5. Sinh mã đơn hàng (dùng làm sessionId cho payment gateway)
         const maDonDatVe = 'DON' + Date.now().toString().slice(-6);
 
-        // 4. Tạo Đơn Đặt Vé (Trạng thái: pending)
-        const insertDonQuery = `
-            INSERT INTO dondatve (madondatve, tongtien, trangthai, id_khach)
-            VALUES ($1, $2, 'pending', $3) RETURNING *
-        `;
-        await client.query(insertDonQuery, [maDonDatVe, totalPrice, userId]);
+        // 6. Lưu session tạm vào Redis (KHÔNG write DB)
+        const sessionData = {
+            maDonDatVe,
+            userId,
+            showtimeId,
+            seatIds,
+            seatPrices,
+            basePrice,
+            concessionDetails,
+            totalPrice,
+            ticketPriceTotal,
+            concessionPrice,
+            paymentMethod: paymentMethod || 'momo',
+            createdAt: new Date().toISOString(),
+        };
+        await seatLockService.createTempBooking(maDonDatVe, sessionData);
 
-        // 4.5 Tạo thông tin bắp nước
-        if (concessionDetails.length > 0) {
-            for (let c of concessionDetails) {
-                await client.query(`
-                    INSERT INTO order_concessions (madondatve, combo_id, quantity, unit_price)
-                    VALUES ($1, $2, $3, $4)
-                `, [maDonDatVe, c.comboId, c.quantity, c.price]);
-            }
-        }
+        // 7. Gia hạn TTL cho các seat locks (đảm bảo ghế không hết hạn trước khi thanh toán xong)
+        await seatLockService.extendUserLocks(showtimeId, userId);
 
-        // 5. Tạo thông tin thanh toán (Trạng thái: pending)
-        const maThanhToan = 'PAY' + Date.now().toString().slice(-6);
-        const insertPaymentQuery = `
-            INSERT INTO thongtinthanhtoan (mathanhtoan, phuongthucthanhtoan, sotienthanhtoan, trangthai, madondatve, paymentgatewaytransactionid)
-            VALUES ($1, $2, $3, 'pending', $4, '')
-        `;
-        await client.query(insertPaymentQuery, [maThanhToan, paymentMethod || 'momo', totalPrice, maDonDatVe]);
-
-        // 6. Tạo Vé Xem Phim (Trạng thái: pending, Giữ trong 10 phút)
-        for (let i = 0; i < seatIds.length; i++) {
-            let maVe = 'VE' + Date.now().toString().slice(-4) + i;
-            let targetSeat = seatRes.rows.find(s => String(s.maghe).trim() === String(seatIds[i]).trim());
-            if (!targetSeat) {
-                await client.query('ROLLBACK');
-                return res.status(400).json({ status: 'error', message: `Lỗi xử lý vé: Không tìm thấy ghế ${seatIds[i]}` });
-            }
-            let ticketPrice = basePrice * targetSeat.hesogiaghe;
-            
-            // Giữ ghế trong 2 phút
-            let expireTime = new Date(Date.now() + 2 * 60 * 1000).toISOString();
-
-            await client.query(`
-                INSERT INTO vexemphim (mavexemphim, qrcode, thoigianhethan, giave, maghe, malichchieu, madondatve, trangthai)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
-            `, [maVe, 'HOLD_' + maVe, expireTime, ticketPrice, seatIds[i], showtimeId, maDonDatVe]);
-        }
-
-        // 6. (Bỏ qua phần thanh toán ngay lập tức theo Workflow mới)
-
-        // Hoàn tất lưu dữ liệu
-        await client.query('COMMIT');
-
-        // --- XỬ LÝ THANH TOÁN VNPAY ---
+        // 8. Tạo URL thanh toán
         let paymentUrl = null;
         if (paymentMethod === 'vnpay') {
             const ipAddr = req.headers['x-forwarded-for'] || 
-                           req.connection.remoteAddress || 
-                           req.socket.remoteAddress || 
-                           req.connection.socket.remoteAddress;
-            
+                           req.connection?.remoteAddress || 
+                           req.socket?.remoteAddress || '127.0.0.1';
             paymentUrl = vnpayService.buildPaymentUrl(
-                maDonDatVe,
-                totalPrice,
-                `Thanh toan ve xem phim DON ${maDonDatVe}`,
-                ipAddr
+                maDonDatVe, totalPrice,
+                `Thanh toan ve xem phim DON ${maDonDatVe}`, ipAddr
             );
         } else if (paymentMethod === 'momo') {
             paymentUrl = await momoService.createPaymentUrl(
-                maDonDatVe,
-                totalPrice,
+                maDonDatVe, totalPrice,
                 `Thanh toan ve xem phim DON ${maDonDatVe}`
             );
         }
 
-        // Tạo thông báo: Đặt vé thành công (giữ chỗ)
-        const showtimeInfoRes = await db.query(`
-            SELECT lc.maphim, p.tenphim, r.tenrapphim
-            FROM lichchieu lc
-            JOIN phim p ON lc.maphim = p.maphim
-            JOIN phongrapphim pr ON lc.maphong = pr.maphong
-            JOIN rapphim r ON pr.marapphim = r.marapphim
-            WHERE lc.malichchieu = $1
-        `, [showtimeId]);
-        if (showtimeInfoRes.rows.length > 0) {
-            const { maphim, tenphim, tenrapphim } = showtimeInfoRes.rows[0];
-            await createNotification({
-                userId,
-                tieuDe: 'Đặt vé thành công! 🎬',
-                noiDung: `Bạn đã giữ ${seatIds.length} ghế cho phim "${tenphim}" tại ${tenrapphim}. Mã đơn: ${maDonDatVe}. Vui lòng thanh toán trong 2 phút.`,
-                maDonDatVe,
-                maPhim: maphim
-            });
-        }
+        // Đã dời thông báo sang sau khi thanh toán thành công để tránh lỗi Foreign Key
 
+        const TTL = seatLockService.TTL;
         res.status(201).json({ 
             status: 'success', 
-            message: 'Giữ ghế thành công! Vui lòng hoàn tất thanh toán trong 2 phút.', 
+            message: `Giữ ghế thành công! Vui lòng hoàn tất thanh toán trong ${Math.floor(TTL/60)} phút.`, 
             data: { 
-                maDonDatVe, 
-                maThanhToan,
+                maDonDatVe,
                 totalPrice,
-                paymentUrl, // Trả về URL thanh toán VNPay nếu có
-                expiresAt: new Date(Date.now() + 2 * 60 * 1000).toISOString()
+                paymentUrl,
+                expiresAt: new Date(Date.now() + TTL * 1000).toISOString()
             } 
         });
 
     } catch (e) {
-        await client.query('ROLLBACK');
         console.error("Booking Error:", e);
         res.status(500).json({ status: 'error', message: 'Lỗi giao dịch đặt vé' });
-    } finally {
-        client.release();
     }
 };
 
@@ -363,35 +333,6 @@ exports.confirmPayment = async (req, res) => {
         );
 
         await client.query('COMMIT');
-
-        // Tạo thông báo: Thanh toán và xác nhận vé thành công
-        (async () => {
-            try {
-                const notifInfoRes = await db.query(`
-                    SELECT lc.maphim, p.tenphim, r.tenrapphim
-                    FROM dondatve d
-                    JOIN vexemphim v ON d.madondatve = v.madondatve
-                    JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
-                    JOIN phim p ON lc.maphim = p.maphim
-                    JOIN phongrapphim pr ON lc.maphong = pr.maphong
-                    JOIN rapphim r ON pr.marapphim = r.marapphim
-                    WHERE d.madondatve = $1
-                    LIMIT 1
-                `, [maDonDatVe]);
-                if (notifInfoRes.rows.length > 0) {
-                    const { maphim, tenphim, tenrapphim } = notifInfoRes.rows[0];
-                    await createNotification({
-                        userId: req.user.id,
-                        tieuDe: 'Thanh toán thành công! 🎉',
-                        noiDung: `Vé phim "${tenphim}" tại ${tenrapphim} đã được xác nhận. Mã đơn: ${maDonDatVe}. Chúc bạn xem phim vui vẻ!`,
-                        maDonDatVe,
-                        maPhim: maphim
-                    });
-                }
-            } catch (err) {
-                console.error('Lỗi tạo thông báo thanh toán (non-critical):', err.message);
-            }
-        })();
 
         // Gửi Email thông báo (Chạy async sau khi đã commit thành công)
         (async () => {
@@ -637,25 +578,36 @@ exports.momoReturn = async (req, res) => {
             return res.send("Chữ ký không hợp lệ!");
         }
 
-        const { resultCode, orderId } = req.query;
+        const { resultCode, orderId, message, transId } = req.query;
 
         if (resultCode == '0') {
             res.send(`
                 <html>
-                    <body style="text-align: center; padding-top: 50px;">
+                    <body style="text-align: center; padding-top: 50px; font-family: sans-serif;">
                         <h1 style="color: green;">Thanh toán MoMo thành công!</h1>
-                        <p>Đơn hàng ${orderId} đã được ghi nhận.</p>
+                        <p>Đơn hàng <b>${orderId}</b> đã được ghi nhận.</p>
                         <p>Bạn có thể quay lại ứng dụng để xem vé.</p>
+                        <button onclick="window.close()" style="padding: 10px 20px; background: #ae2070; color: white; border: none; border-radius: 5px; cursor: pointer;">Đóng trình duyệt</button>
                     </body>
                 </html>
             `);
         } else {
+            // Xử lý khi người dùng hủy hoặc lỗi
+            await handlePaymentFailure(orderId, transId, resultCode, message);
+            
+            let statusMessage = "Thanh toán thất bại hoặc đã bị hủy";
+            if (resultCode == '1006') {
+                statusMessage = "Bạn đã hủy giao dịch MoMo";
+            }
+
             res.send(`
                 <html>
-                    <body style="text-align: center; padding-top: 50px;">
-                        <h1 style="color: red;">Thanh toán thất bại hoặc đã bị hủy</h1>
-                        <p>Mã lỗi: ${resultCode}</p>
-                        <a href="/">Quay về trang chủ</a>
+                    <body style="text-align: center; padding-top: 50px; font-family: sans-serif;">
+                        <h1 style="color: #ae2070;">${statusMessage}</h1>
+                        <p>Mã đơn hàng: <b>${orderId}</b></p>
+                        <p>Lý do: ${message || 'Giao dịch không thành công'}</p>
+                        <p>Ghế của bạn đã được giải phóng. Vui lòng thực hiện đặt lại nếu muốn.</p>
+                        <button onclick="window.close()" style="padding: 10px 20px; background: #333; color: white; border: none; border-radius: 5px; cursor: pointer;">Quay lại ứng dụng</button>
                     </body>
                 </html>
             `);
@@ -679,14 +631,16 @@ exports.momoIpn = async (req, res) => {
             return res.status(400).json({ message: "Invalid signature" });
         }
 
-        const { orderId, resultCode, amount, transId } = req.body;
+        const { orderId, resultCode, amount, transId, message } = req.body;
 
         if (resultCode == '0') {
             // Thanh toán thành công -> Cập nhật DB
             await updateOrderAfterPayment(orderId, transId);
             console.log(`MoMo IPN Success: Order ${orderId} marked as paid.`);
         } else {
-            console.log(`MoMo IPN Failed: Order ${orderId} with code ${resultCode}`);
+            // Thanh toán thất bại hoặc người dùng hủy
+            await handlePaymentFailure(orderId, transId, resultCode, message);
+            console.log(`MoMo IPN Failed/Cancelled: Order ${orderId} with code ${resultCode} - ${message}`);
         }
 
         // MoMo yêu cầu trả về HTTP 204 hoặc JSON
@@ -735,40 +689,86 @@ exports.checkBookingStatus = async (req, res) => {
 
 /**
  * Hàm dùng chung để cập nhật trạng thái đơn hàng sau khi thanh toán thành công
+ * LUỒNG MỚI: Đọc session từ Redis → INSERT vào PostgreSQL → Xóa Redis → Broadcast Socket
  */
 async function updateOrderAfterPayment(maDonDatVe, transId) {
+    // 1. Lấy session từ Redis
+    const session = await seatLockService.getTempBooking(maDonDatVe);
+    if (!session) {
+        console.error(`[updateOrderAfterPayment] Không tìm thấy session Redis cho ${maDonDatVe}`);
+        // Có thể session đã expire — kiểm tra DB xem đã persist chưa
+        const existingOrder = await db.query('SELECT 1 FROM dondatve WHERE madondatve = $1', [maDonDatVe]);
+        if (existingOrder.rows.length > 0) {
+            console.log(`[updateOrderAfterPayment] Đơn ${maDonDatVe} đã tồn tại trong DB — bỏ qua.`);
+            return true;
+        }
+        throw new Error(`Session ${maDonDatVe} không tồn tại trong Redis và DB`);
+    }
+
+    const { userId, showtimeId, seatIds, seatPrices, basePrice, concessionDetails, totalPrice, paymentMethod } = session;
+
     const client = await db.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Cập nhật bảng thongtinthanhtoan
+        // 2. INSERT đơn đặt vé vào DB (trạng thái: paid ngay luôn)
         await client.query(
-            "UPDATE thongtinthanhtoan SET trangthai = 'success', paymentgatewaytransactionid = $1, thoidiemthanhtoan = CURRENT_TIMESTAMP WHERE madondatve = $2",
-            [transId, maDonDatVe]
+            `INSERT INTO dondatve (madondatve, tongtien, trangthai, id_khach) VALUES ($1, $2, 'paid', $3)`,
+            [maDonDatVe, totalPrice, userId]
         );
 
-        // 2. Cập nhật trạng thái đơn hàng dondatve
+        // 3. INSERT thông tin thanh toán (trạng thái: success)
+        const maThanhToan = 'PAY' + Date.now().toString().slice(-6);
         await client.query(
-            "UPDATE dondatve SET trangthai = 'paid' WHERE madondatve = $1",
-            [maDonDatVe]
+            `INSERT INTO thongtinthanhtoan (mathanhtoan, phuongthucthanhtoan, sotienthanhtoan, trangthai, madondatve, paymentgatewaytransactionid, thoidiemthanhtoan)
+             VALUES ($1, $2, $3, 'success', $4, $5, CURRENT_TIMESTAMP)`,
+            [maThanhToan, paymentMethod || 'momo', totalPrice, maDonDatVe, transId]
         );
 
-        // 3. Kích hoạt tất cả vé thuộc đơn hàng này
-        await client.query(
-            "UPDATE vexemphim SET trangthai = 'active' WHERE madondatve = $1",
-            [maDonDatVe]
-        );
+        // 4. INSERT vé xem phim (trạng thái: active ngay luôn)
+        // Lấy thời gian chiếu để tính toán thoigianhethan
+        const showtimeRes = await client.query('SELECT ngaychieu FROM lichchieu WHERE malichchieu = $1', [showtimeId]);
+        const startTime = showtimeRes.rows[0]?.ngaychieu || new Date();
+        const expireTime = new Date(new Date(startTime).getTime() + 3 * 60 * 60 * 1000); // Hết hạn sau 3h từ lúc chiếu
 
-        // Lấy ID khách để gửi thông báo
-        const orderRes = await client.query('SELECT id_khach FROM dondatve WHERE madondatve = $1', [maDonDatVe]);
-        const id_khach = orderRes.rows[0]?.id_khach;
+        for (let i = 0; i < seatIds.length; i++) {
+            const maVe = 'VE' + Date.now().toString().slice(-4) + i;
+            const ticketPrice = seatPrices[seatIds[i]] || basePrice;
+            await client.query(
+                `INSERT INTO vexemphim (mavexemphim, qrcode, giave, maghe, malichchieu, madondatve, trangthai, thoigianhethan)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'active', $7)`,
+                [maVe, 'QR_' + maVe, ticketPrice, seatIds[i], showtimeId, maDonDatVe, expireTime]
+            );
+        }
+
+        // 5. INSERT bắp nước nếu có
+        if (concessionDetails && concessionDetails.length > 0) {
+            for (let c of concessionDetails) {
+                await client.query(
+                    `INSERT INTO order_concessions (madondatve, combo_id, quantity, unit_price) VALUES ($1, $2, $3, $4)`,
+                    [maDonDatVe, c.comboId, c.quantity, c.price]
+                );
+            }
+        }
 
         await client.query('COMMIT');
 
-        // 4. Gửi thông báo và email (không chặn luồng chính)
-        if (id_khach) {
-            handlePostPaymentActions(maDonDatVe, id_khach).catch(err => console.error("Post Payment Actions Error:", err));
+        // 6. Xóa session + unlock ghế trong Redis
+        await seatLockService.deleteTempBooking(maDonDatVe);
+        // Không unlockAllUserSeats vì ghế đã confirmed — chỉ xóa seat keys
+        for (const seatId of seatIds) {
+            try { await require('../utils/redisClient').del(`seat:lock:${showtimeId}:${seatId}`); } catch {}
         }
+        try { await require('../utils/redisClient').del(`user:seats:${showtimeId}:${userId}`); } catch {}
+
+        // 7. Broadcast Socket.IO
+        const io = getIO();
+        if (io && io._seatHelpers) {
+            io._seatHelpers.broadcastSeatsConfirmed(showtimeId, seatIds);
+        }
+
+        // 8. Gửi thông báo và email (không chặn luồng chính)
+        handlePostPaymentActions(maDonDatVe, userId).catch(err => console.error("Post Payment Actions Error:", err));
 
         return true;
     } catch (e) {
@@ -779,4 +779,96 @@ async function updateOrderAfterPayment(maDonDatVe, transId) {
         client.release();
     }
 }
+
+/**
+ * Hàm dùng chung để xử lý khi thanh toán thất bại hoặc người dùng hủy
+ * LUỒNG MỚI: Xóa Redis session + unlock ghế + broadcast socket. KHÔNG cần update DB.
+ */
+async function handlePaymentFailure(maDonDatVe, transId, resultCode, message) {
+    try {
+        // 1. Lấy session từ Redis
+        const session = await seatLockService.getTempBooking(maDonDatVe);
+        
+        if (session) {
+            const { userId, showtimeId, seatIds } = session;
+
+            // 2. Unlock tất cả ghế trong Redis
+            const unlockedSeats = await seatLockService.unlockAllUserSeats(showtimeId, userId);
+
+            // 3. Xóa session tạm
+            await seatLockService.deleteTempBooking(maDonDatVe);
+
+            // 4. Broadcast Socket.IO — ghế đã được giải phóng
+            const io = getIO();
+            if (io && io._seatHelpers) {
+                io._seatHelpers.broadcastSeatsUnlocked(showtimeId, unlockedSeats.length > 0 ? unlockedSeats : seatIds);
+            }
+
+            // 5. Gửi thông báo cho user
+            const showtimeInfoRes = await db.query(`
+                SELECT p.tenphim, r.tenrapphim, p.maphim
+                FROM lichchieu lc
+                JOIN phim p ON lc.maphim = p.maphim
+                JOIN phongrapphim pr ON lc.maphong = pr.maphong
+                JOIN rapphim r ON pr.marapphim = r.marapphim
+                WHERE lc.malichchieu = $1
+            `, [showtimeId]);
+
+            if (showtimeInfoRes.rows.length > 0) {
+                const { tenphim, tenrapphim, maphim } = showtimeInfoRes.rows[0];
+                await createNotification({
+                    userId,
+                    tieuDe: 'Thanh toán không thành công ❌',
+                    noiDung: `Giao dịch cho đơn ${maDonDatVe} (Phim: ${tenphim}) đã bị hủy. Ghế đã được giải phóng.`,
+                    maDonDatVe,
+                    maPhim: maphim
+                });
+            }
+
+            console.log(`[handlePaymentFailure] Đã cleanup session ${maDonDatVe}, unlock ${unlockedSeats.length} ghế`);
+        } else {
+            console.warn(`[handlePaymentFailure] Không tìm thấy session Redis cho ${maDonDatVe} — có thể đã expire`);
+        }
+
+        return true;
+    } catch (e) {
+        console.error("handlePaymentFailure Error:", e);
+        throw e;
+    }
+}
+
+/**
+ * API Controller: Cho phép người dùng chủ động hủy đơn hàng từ App
+ * LUỒNG MỚI: Xóa Redis session + unlock ghế. Không cần update DB.
+ */
+exports.cancelBooking = async (req, res) => {
+    const { id } = req.params; // id = maDonDatVe (sessionId)
+    const userId = String(req.user.id);
+
+    try {
+        // 1. Kiểm tra session có tồn tại trong Redis không
+        const session = await seatLockService.getTempBooking(id);
+
+        if (!session) {
+            return res.status(404).json({ status: 'error', message: 'Không tìm thấy đơn hàng hoặc đã hết hạn' });
+        }
+
+        // 2. Xác minh đúng user (bảo mật)
+        if (String(session.userId) !== userId) {
+            return res.status(403).json({ status: 'error', message: 'Bạn không có quyền hủy đơn này' });
+        }
+
+        // 3. Gọi hàm helper để xử lý hủy
+        await handlePaymentFailure(id, 'USER_CANCEL_IN_APP', 1006, 'Người dùng chủ động hủy từ ứng dụng');
+
+        return res.json({ 
+            status: 'success', 
+            message: 'Đơn hàng đã được hủy thành công, ghế đã được giải phóng.' 
+        });
+
+    } catch (error) {
+        console.error("Lỗi cancelBooking:", error);
+        return res.status(500).json({ status: 'error', message: 'Lỗi hệ thống khi hủy đơn hàng' });
+    }
+};
 
