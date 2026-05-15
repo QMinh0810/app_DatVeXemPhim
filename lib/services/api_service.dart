@@ -166,6 +166,24 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
+  /// Lấy trạng thái đơn hàng (Polling)
+  static Future<Map<String, dynamic>> getBookingStatus(String id) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/bookings/status/$id'),
+      headers: _headers,
+    );
+    return jsonDecode(res.body);
+  }
+
+  /// Hủy đơn hàng chủ động
+  static Future<Map<String, dynamic>> cancelBooking(String id) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/bookings/$id/cancel'),
+      headers: _headers,
+    );
+    return jsonDecode(res.body);
+  }
+
   // ==================== CONCESSIONS ====================
 
   /// Lấy danh sách Combo

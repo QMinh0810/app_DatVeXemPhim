@@ -27,14 +27,16 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     super.dispose();
   }
 
-  // ============= Định nghĩa màu ghế =============
-  static const Color _normalColor = Color(0xFF2196F3);
-  static const Color _vipColor = Color(0xFFE53935);
-  static const Color _coupleColor = Color(0xFFE91E63);
-  static const Color _brokenColor = Color(0xFFBDBDBD);
-  static const Color _bookedColor = Color(0xFF9E9E9E);
-  static const Color _selectedColor = Color(0xFF4CAF50);
-  static const Color _lockedByOtherColor = Color(0xFFFF9800); // Màu cam cho ghế người khác đang giữ
+  // ============= Định nghĩa màu sắc & Style =============
+  static const Color _brandColor = Color(0xFFE51937);
+  static const Color _selectedColor = Color(0xFF5CC00F);
+  static const Color _bookedColor = Color(0xFFCED4DA);
+  static const Color _lockedByOtherColor = Color(0xFFADB5BD);
+  static const Color _vipColor = Color(0xFFFFA000);
+  static const Color _coupleColor = Color(0xFFD81B60);
+  static const Color _normalColor = Colors.white;
+  static const Color _seatBorderColor = Color(0xFFE9ECEF);
+  static const Color _brokenColor = Color(0xFFF8F9FA);
 
   Color _getSeatColor(SeatData seat, bool isSelected) {
     if (seat.isBroken) return _brokenColor;
@@ -52,22 +54,41 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   Widget _buildSeat(BuildContext context, BookingViewModel bookingVM, SeatData seat) {
     final isSelected = bookingVM.selectedSeats.contains(seat.maghe);
     final seatColor = _getSeatColor(seat, isSelected);
-    
+    final bool isSpecial = seat.loaighe == 'vip';
+    final bool isAvailable = seat.isSelectable && !seat.isLockedByOther;
+
     return GestureDetector(
       onTap: seat.isSelectable ? () => bookingVM.toggleSeat(seat.maghe) : null,
-      child: AspectRatio(
-        aspectRatio: 1.0,
-        child: Container(
-          margin: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: seatColor,
-            borderRadius: BorderRadius.circular(6),
-            border: (seat.isLockedByMe || isSelected) ? Border.all(color: Colors.white, width: 2) : null,
+      child: Container(
+        margin: const EdgeInsets.all(3.5),
+        decoration: BoxDecoration(
+          color: seatColor,
+          borderRadius: BorderRadius.circular(4.5),
+          border: Border.all(
+            color: (isSelected || seat.isLockedByMe) 
+                ? _selectedColor 
+                : (seat.isBooked || seat.isLockedByOther) 
+                    ? Colors.transparent 
+                    : isSpecial ? _vipColor : const Color(0xFFE9ECEF),
+            width: 1.2,
           ),
-          alignment: Alignment.center,
+          boxShadow: (isSelected || seat.isLockedByMe) ? [
+            BoxShadow(color: _selectedColor.withOpacity(0.3), blurRadius: 4, spreadRadius: 1)
+          ] : null,
+        ),
+        alignment: Alignment.center,
+        child: Visibility(
+          visible: !seat.isBooked && !seat.isLockedByOther && !seat.isBroken,
+          replacement: seat.isBooked 
+            ? const Icon(Icons.close, size: 8, color: Colors.white70) 
+            : const SizedBox(),
           child: Text(
             seat.displayName,
-            style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 7.5, 
+              color: (isSelected || isSpecial || seat.isLockedByMe) ? Colors.white : Colors.black45, 
+              fontWeight: FontWeight.bold
+            ),
           ),
         ),
       ),
@@ -80,20 +101,27 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
     return GestureDetector(
       onTap: seat.isSelectable ? () => bookingVM.toggleSeat(seat.maghe) : null,
-      child: AspectRatio(
-        aspectRatio: 2.0,
-        child: Container(
-          margin: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: seatColor,
-            borderRadius: BorderRadius.circular(8),
-            border: (seat.isLockedByMe || isSelected) ? Border.all(color: Colors.white, width: 2) : null,
+      child: Container(
+        margin: const EdgeInsets.all(3.5),
+        decoration: BoxDecoration(
+          color: seatColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: (isSelected || seat.isLockedByMe) ? _selectedColor : const Color(0xFFE9ECEF),
+            width: 1.5,
           ),
-          alignment: Alignment.center,
-          child: Text(
-            seat.displayName,
-            style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
-          ),
+        ),
+        alignment: Alignment.center,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.favorite, size: 10, color: Colors.white70),
+            const SizedBox(width: 4),
+            Text(
+              seat.displayName,
+              style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
       ),
     );
@@ -104,9 +132,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     return Consumer<BookingViewModel>(
       builder: (context, bookingVM, child) {
         if (bookingVM.isLoading) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Chọn Ghế', style: TextStyle(color: Colors.black))),
-            body: const Center(child: CircularProgressIndicator()),
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(_brandColor))),
           );
         }
 
@@ -114,108 +141,133 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         final maxCols = bookingVM.maxCols;
 
         return Scaffold(
+          backgroundColor: Colors.white,
           appBar: AppBar(
-            title: const Text('Chọn Ghế', style: TextStyle(color: Colors.black)),
+            title: Column(
+              children: [
+                Text(bookingVM.selectedMovie?.title ?? 'Chọn ghế', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+                Text('${bookingVM.selectedTheaterName} | ${bookingVM.selectedRoomName}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              ],
+            ),
             backgroundColor: Colors.white,
-            elevation: 1,
+            elevation: 0,
+            centerTitle: true,
             iconTheme: const IconThemeData(color: Colors.black),
+            actions: [
+              IconButton(onPressed: () => bookingVM.fetchSeatMap(), icon: const Icon(Icons.refresh, size: 20)),
+            ],
           ),
           body: PopScope(
             canPop: true,
             onPopInvokedWithResult: (didPop, result) {
-              if (didPop) {
-                // Khi người dùng nhấn nút Back hoặc vuốt để quay lại
-                // Giải phóng các ghế đã chọn để người khác có thể chọn ngay
-                bookingVM.releaseSeats();
-              }
+              if (didPop) bookingVM.releaseSeats();
             },
             child: Column(
               children: [
-                // Màn hình
-                const SizedBox(height: 20),
-                const Center(child: Text('MÀN HÌNH', style: TextStyle(fontSize: 10, color: Colors.grey, letterSpacing: 8))),
-                Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 60),
-                  height: 4,
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
+                // Screen Visual
+                const SizedBox(height: 10),
+                Stack(
+                  alignment: Alignment.topCenter,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 40),
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            _brandColor.withOpacity(0.12),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                    Column(
+                      children: [
+                        Container(
+                          width: MediaQuery.of(context).size.width * 0.7,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE9ECEF),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(color: _brandColor.withOpacity(0.2), blurRadius: 10, spreadRadius: 1)
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('MÀN HÌNH', style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 4)),
+                      ],
+                    ),
+                  ],
                 ),
                 
-                const SizedBox(height: 30),
+                const SizedBox(height: 20),
   
                 // Sơ đồ ghế
                 Expanded(
                   child: InteractiveViewer(
-                    minScale: 0.8,
-                    maxScale: 2.5,
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Column(
-                        children: rows.map((rowName) {
-                          // Kiểm tra xem hàng này có phải hàng ghế đôi không dựa trên dữ liệu thực tế
-                          bool isCoupleRow = false;
-                          for (int col = 1; col <= maxCols; col++) {
-                            final seat = bookingVM.getSeatAt(rowName, col);
-                            if (seat != null && seat.loaighe == 'couple') {
-                              isCoupleRow = true;
-                              break;
-                            }
-                          }
-  
-                          return Row(
-                            children: [
-                              // Label trái
-                              SizedBox(width: 20, child: Text(rowName, style: const TextStyle(fontSize: 12, color: Colors.grey))),
-                              
-                              // Các cột ghế
-                              ...(isCoupleRow 
-                                ? List.generate(maxCols ~/ 2, (index) {
-                                    int col = index + 1;
-                                    final seat = bookingVM.getSeatAt(rowName, col);
-                                    
-                                    Widget seatWidget = seat != null 
-                                        ? _buildCoupleSeat(context, bookingVM, seat) 
-                                        : const SizedBox();
-                                        
-                                    // Chèn lối đi sau ghế thứ 2
-                                    if (index == 1) { 
-                                      return [
-                                        Expanded(flex: 2, child: seatWidget),
-                                        const SizedBox(width: 24),
-                                      ];
-                                    }
-                                    return [Expanded(flex: 2, child: seatWidget)];
-                                  }).expand((x) => x).toList()
-                                : List.generate(maxCols, (colIndex) {
-                                    int col = colIndex + 1;
-                                    final seat = bookingVM.getSeatAt(rowName, col);
-                                    
-                                    Widget seatWidget = seat != null 
-                                        ? _buildSeat(context, bookingVM, seat) 
-                                        : const SizedBox();
-                                    
-                                    // Chèn lối đi ở giữa (sau cột 4)
-                                    if (col == 4) {
-                                      return [
-                                        Expanded(child: seatWidget),
-                                        const SizedBox(width: 24), // Lối đi giữa
-                                      ];
-                                    }
-  
-                                    return [Expanded(child: seatWidget)];
-                                  }).expand((x) => x).toList()
-                              ),
-  
-                              // Label phải
-                              SizedBox(width: 20, child: Text(rowName, textAlign: TextAlign.right, style: const TextStyle(fontSize: 12, color: Colors.grey))),
-                            ],
-                          );
-                        }).toList(),
+                    minScale: 0.5,
+                    maxScale: 2.0,
+                    boundaryMargin: const EdgeInsets.all(40),
+                    child: Center(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: SingleChildScrollView(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Column(
+                              children: rows.map((rowName) {
+                                bool isCoupleRow = false;
+                                for (int col = 1; col <= maxCols; col++) {
+                                  final seat = bookingVM.getSeatAt(rowName, col);
+                                  if (seat != null && seat.loaighe == 'couple') {
+                                    isCoupleRow = true;
+                                    break;
+                                  }
+                                }
+        
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 2.0),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(width: 25, child: Text(rowName, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold))),
+                                      ...(isCoupleRow 
+                                        ? List.generate(maxCols ~/ 2, (index) {
+                                            int col = index + 1;
+                                            final seat = bookingVM.getSeatAt(rowName, col);
+                                            Widget seatWidget = seat != null 
+                                                ? SizedBox(width: 70, height: 35, child: _buildCoupleSeat(context, bookingVM, seat))
+                                                : const SizedBox(width: 70, height: 35);
+                                            return [seatWidget];
+                                          }).expand((x) => x).toList()
+                                        : List.generate(maxCols, (colIndex) {
+                                            int col = colIndex + 1;
+                                            final seat = bookingVM.getSeatAt(rowName, col);
+                                            Widget seatWidget = seat != null 
+                                                ? SizedBox(width: 35, height: 35, child: _buildSeat(context, bookingVM, seat))
+                                                : const SizedBox(width: 35, height: 35);
+                                            
+                                            if (col == 4) {
+                                              return [seatWidget, const SizedBox(width: 20)];
+                                            }
+                                            return [seatWidget];
+                                          }).expand((x) => x).toList()
+                                      ),
+                                      SizedBox(width: 25, child: Text(rowName, textAlign: TextAlign.right, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold))),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
   
                 _buildLegend(),
               ],
@@ -229,79 +281,107 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
   Widget _buildLegend() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.white,
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 8,
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: const BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, -5))],
+      ),
+      child: Column(
         children: [
-          _legendItem(_normalColor, 'Thường'),
-          _legendItem(_vipColor, 'VIP'),
-          _legendItem(_coupleColor, 'Couple'),
-          _legendItem(_bookedColor, 'Đã đặt'),
-          _legendItem(_selectedColor, 'Đang chọn'),
-          _legendItem(_lockedByOtherColor, 'Đang giữ'),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _legendItem(_normalColor, 'Thường', hasBorder: true),
+              _legendItem(_vipColor, 'VIP'),
+              _legendItem(_coupleColor, 'Couple'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _legendItem(_bookedColor, 'Đã mua'),
+              _legendItem(_selectedColor, 'Đang chọn'),
+              _legendItem(_lockedByOtherColor, 'Đang giữ'),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _legendItem(Color color, String text) {
+  Widget _legendItem(Color color, String text, {bool hasBorder = false}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 4),
-        Text(text, style: const TextStyle(fontSize: 11, color: Colors.black54)),
+        Container(
+          width: 14, 
+          height: 14, 
+          decoration: BoxDecoration(
+            color: color, 
+            borderRadius: BorderRadius.circular(3),
+            border: hasBorder ? Border.all(color: const Color(0xFFE9ECEF)) : null,
+          )
+        ),
+        const SizedBox(width: 8),
+        Text(text, style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w500)),
       ],
     );
   }
 
   Widget _buildBottomBar(BookingViewModel bookingVM) {
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5))],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    bookingVM.selectedSeats.isEmpty 
-                      ? 'CHƯA CHỌN GHẾ' 
-                      : 'GHẾ: ${bookingVM.selectedSeats.map((id) => bookingVM.getSeatData(id)?.displayName ?? id).join(', ')}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    '${NumberFormat('#,###').format(bookingVM.totalPrice)} VNĐ',
-                    style: const TextStyle(color: Color(0xFFE51937), fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                ],
-              ),
+    final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ');
+
+    return Container(
+      padding: EdgeInsets.only(left: 24, right: 24, top: 16, bottom: MediaQuery.of(context).padding.bottom + 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -5))],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  bookingVM.selectedSeats.isEmpty 
+                    ? 'Chưa chọn ghế' 
+                    : '${bookingVM.selectedSeats.length} ghế: ${bookingVM.selectedSeats.map((id) => bookingVM.getSeatData(id)?.displayName ?? id).join(', ')}',
+                  style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w500),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  currencyFormat.format(bookingVM.totalPrice),
+                  style: const TextStyle(color: Color(0xFFE51937), fontWeight: FontWeight.bold, fontSize: 22),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            ElevatedButton(
+          ),
+          const SizedBox(width: 16),
+          SizedBox(
+            height: 52,
+            child: ElevatedButton(
               onPressed: bookingVM.selectedSeats.isEmpty ? null : () {
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const ComboSelectionScreen()));
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE51937),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                backgroundColor: _brandColor,
+                disabledBackgroundColor: Colors.grey[300],
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
               ),
-              child: const Text('TIẾP TỤC', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('TIẾP TỤC', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+
 }

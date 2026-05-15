@@ -10,10 +10,17 @@ import '../services/api_service.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import 'showtime_screen.dart';
 
-class MovieInfoScreen extends StatelessWidget {
+class MovieInfoScreen extends StatefulWidget {
   final MovieModel movie;
 
   const MovieInfoScreen({super.key, required this.movie});
+
+  @override
+  State<MovieInfoScreen> createState() => _MovieInfoScreenState();
+}
+
+class _MovieInfoScreenState extends State<MovieInfoScreen> {
+  bool _isDescriptionExpanded = false;
 
   String _formatDuration(int minutes) {
     final h = minutes ~/ 60;
@@ -24,7 +31,7 @@ class MovieInfoScreen extends StatelessWidget {
   }
 
   Future<void> _openTrailer(BuildContext context) async {
-    final url = movie.trailerUrl;
+    final url = widget.movie.trailerUrl;
     if (url == null || url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Trailer chưa được cập nhật')),
@@ -106,7 +113,7 @@ class MovieInfoScreen extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             Image.network(
-              movie.posterUrl,
+              widget.movie.posterUrl,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => Container(
                 color: Colors.grey[800],
@@ -155,7 +162,7 @@ class MovieInfoScreen extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.network(
-                  movie.posterUrl,
+                  widget.movie.posterUrl,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Container(
                     color: Colors.grey[300],
@@ -172,7 +179,7 @@ class MovieInfoScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 10),
                 Text(
-                  movie.title,
+                  widget.movie.title,
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -184,20 +191,20 @@ class MovieInfoScreen extends StatelessWidget {
                 Row(
                   children: [
                     _buildChip(Icons.calendar_today_outlined,
-                        '${movie.releaseDate.day.toString().padLeft(2, '0')}/${movie.releaseDate.month.toString().padLeft(2, '0')}/${movie.releaseDate.year}'),
+                        '${widget.movie.releaseDate.day.toString().padLeft(2, '0')}/${widget.movie.releaseDate.month.toString().padLeft(2, '0')}/${widget.movie.releaseDate.year}'),
                     const SizedBox(width: 10),
-                    _buildChip(Icons.access_time_outlined, _formatDuration(movie.duration)),
+                    _buildChip(Icons.access_time_outlined, _formatDuration(widget.movie.duration)),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: movie.ratingLimit >= 16 ? Colors.red : Colors.green,
+                    color: widget.movie.ratingLimit >= 16 ? Colors.red : Colors.green,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    movie.ratingLimit > 0 ? 'T${movie.ratingLimit}' : 'P',
+                    widget.movie.ratingLimit > 0 ? 'T${widget.movie.ratingLimit}' : 'P',
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ),
@@ -230,9 +237,42 @@ class MovieInfoScreen extends StatelessWidget {
   Widget _buildDescription() {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Text(
-        movie.description,
-        style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.movie.description,
+            style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.6),
+            maxLines: _isDescriptionExpanded ? null : 3,
+            overflow: _isDescriptionExpanded ? null : TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _isDescriptionExpanded = !_isDescriptionExpanded;
+              });
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  _isDescriptionExpanded ? 'Thu gọn' : 'Xem thêm',
+                  style: const TextStyle(
+                    color: Color(0xFFE51937),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                Icon(
+                  _isDescriptionExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                  color: const Color(0xFFE51937),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -243,15 +283,15 @@ class MovieInfoScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDetailRow('Kiểm duyệt', movie.ratingLimit > 0
-              ? 'T${movie.ratingLimit} - Phim được phổ biến đến người xem từ đủ ${movie.ratingLimit} tuổi trở lên.'
+          _buildDetailRow('Kiểm duyệt', widget.movie.ratingLimit > 0
+              ? 'T${widget.movie.ratingLimit} - Phim được phổ biến đến người xem từ đủ ${widget.movie.ratingLimit} tuổi trở lên.'
               : 'P - Phim được phổ biến đến mọi đối tượng.'),
           const SizedBox(height: 12),
-          _buildDetailRow('Thể loại', movie.genres.isNotEmpty ? movie.genres.join(', ') : 'Đang cập nhật'),
+          _buildDetailRow('Thể loại', widget.movie.genres.isNotEmpty ? widget.movie.genres.join(', ') : 'Đang cập nhật'),
           const SizedBox(height: 20),
-          if (movie.directors.isNotEmpty) _buildPersonsList(title: 'Đạo diễn', persons: movie.directors),
+          if (widget.movie.directors.isNotEmpty) _buildPersonsList(title: 'Đạo diễn', persons: widget.movie.directors),
           const SizedBox(height: 20),
-          if (movie.actors.isNotEmpty) _buildPersonsList(title: 'Diễn viên', persons: movie.actors),
+          if (widget.movie.actors.isNotEmpty) _buildPersonsList(title: 'Diễn viên', persons: widget.movie.actors),
         ],
       ),
     );
@@ -394,7 +434,7 @@ class MovieInfoScreen extends StatelessWidget {
                 const Divider(height: 1),
                 Expanded(
                   child: FutureBuilder<List<dynamic>>(
-                    future: ApiService.fetchReviews(movie.id),
+                    future: ApiService.fetchReviews(widget.movie.id),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
@@ -496,7 +536,7 @@ class MovieInfoScreen extends StatelessWidget {
         height: 50,
         child: ElevatedButton(
           onPressed: () {
-            context.read<BookingViewModel>().selectMovie(movie);
+            context.read<BookingViewModel>().selectMovie(widget.movie);
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => const ShowtimeScreen()),
@@ -597,3 +637,5 @@ class _TrailerDialogState extends State<_TrailerDialog> {
     );
   }
 }
+
+

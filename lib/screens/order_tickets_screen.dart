@@ -150,14 +150,26 @@ class OrderTicketsScreen extends StatelessWidget {
   }
 
   Widget _buildTicketCard(BuildContext context, Map<String, dynamic> ticket, bool isUpcoming) {
+    final bool isCancelled = order['trangThai'] == 'cancelled';
+    final bool isAccessible = isUpcoming && !isCancelled;
+
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TicketDetailScreen(ticket: ticket, order: order),
-          ),
-        );
+        if (isAccessible) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TicketDetailScreen(ticket: ticket, order: order),
+            ),
+          );
+        } else if (!isUpcoming && !isCancelled) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Phim đã chiếu xong, không thể xem chi tiết vé'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -173,70 +185,80 @@ class OrderTicketsScreen extends StatelessWidget {
             ),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            children: [
-              // Ticket Icon/Visual
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF0F3),
-                  borderRadius: BorderRadius.circular(12),
+        child: Opacity(
+          opacity: isAccessible ? 1.0 : 0.6,
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                // Ticket Icon/Visual
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: isAccessible ? const Color(0xFFFFF0F3) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.confirmation_number,
+                    color: isAccessible ? const Color(0xFFE51937) : Colors.grey,
+                    size: 28,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.confirmation_number,
-                  color: Color(0xFFE51937),
-                  size: 28,
+                const SizedBox(width: 16),
+                // Ticket Info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ghế: ${ticket['tenGhe']}',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF212529),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Mã vé: ${ticket['maVe']}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              // Ticket Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                // Price and Arrow
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'Ghế: ${ticket['tenGhe']}',
-                      style: const TextStyle(
-                        fontSize: 17,
+                      '${ticket['giaVe']} đ',
+                      style: TextStyle(
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF212529),
+                        color: isAccessible ? const Color(0xFFE51937) : Colors.grey,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'Mã vé: ${ticket['maVe']}',
-                      style: const TextStyle(
-                        fontSize: 13,
+                    if (isAccessible)
+                      const Icon(
+                        Icons.arrow_forward_ios,
+                        size: 14,
+                        color: Color(0xFFADB5BD),
+                      )
+                    else
+                      const Icon(
+                        Icons.lock_outline,
+                        size: 16,
                         color: Colors.grey,
                       ),
-                    ),
                   ],
                 ),
-              ),
-              // Price and Arrow
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${ticket['giaVe']} đ',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFE51937),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: Color(0xFFADB5BD),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
