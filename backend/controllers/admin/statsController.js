@@ -98,12 +98,12 @@ exports.dailyRevenueStats = async (req, res) => {
         // 1. Tiền bán vé theo ngày (chỉ tính đơn paid)
         const ticketRevenueQuery = `
             SELECT 
-                DATE(d.ngaydatve) as ngay,
+                DATE(d.ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh') as ngay,
                 COALESCE(SUM(CASE WHEN d.trangthai = 'paid' THEN d.tongtien ELSE 0 END), 0) as tien_ban_ve,
                 COALESCE(SUM(CASE WHEN d.trangthai = 'cancelled' THEN d.tongtien ELSE 0 END), 0) as tien_hoan_huy
             FROM dondatve d
-            WHERE DATE(d.ngaydatve) BETWEEN $1 AND $2
-            GROUP BY DATE(d.ngaydatve)
+            WHERE DATE(d.ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh') BETWEEN $1 AND $2
+            GROUP BY DATE(d.ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh')
             ORDER BY ngay
         `;
         const ticketRes = await db.query(ticketRevenueQuery, [from, to]);
@@ -135,13 +135,13 @@ exports.weeklyRevenueStats = async (req, res) => {
     try {
         const result = await db.query(`
             SELECT
-                DATE(d.ngaydatve) as ngay,
-                EXTRACT(DOW FROM d.ngaydatve) as thu_trong_tuan,
+                DATE(d.ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh') as ngay,
+                EXTRACT(DOW FROM d.ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh') as thu_trong_tuan,
                 COALESCE(SUM(CASE WHEN d.trangthai = 'paid' THEN d.tongtien ELSE 0 END), 0) as doanh_thu
             FROM dondatve d
-            WHERE DATE(d.ngaydatve) >= CURRENT_DATE - INTERVAL '6 days'
-              AND DATE(d.ngaydatve) <= CURRENT_DATE
-            GROUP BY DATE(d.ngaydatve), EXTRACT(DOW FROM d.ngaydatve)
+            WHERE DATE(d.ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh') >= CURRENT_DATE - INTERVAL '6 days'
+              AND DATE(d.ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh') <= CURRENT_DATE
+            GROUP BY DATE(d.ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh'), EXTRACT(DOW FROM d.ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh')
             ORDER BY ngay ASC
         `);
 
@@ -340,5 +340,61 @@ exports.monthlyReport = async (req, res) => {
     } catch (e) {
         console.error("Monthly Report Error:", e);
         res.status(500).json({ status: 'error', message: 'Lỗi khi xuất báo cáo' });
+    }
+};
+
+/**
+ * Tổng quan Dashboard (hôm nay)
+ * GET /api/admin/stats/dashboard-summary
+ */
+exports.dashboardSummary = async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        // 1. Doanh thu hôm nay
+        const revenueRes = await db.query(
+            "SELECT COALESCE(SUM(tongtien), 0)::int as total FROM dondatve WHERE DATE(ngaydatve AT TIME ZONE 'Asia/Ho_Chi_Minh') = $1 AND trangthai = 'paid'",
+            [today]
+        );
+
+        // 2. Vé bán hôm nay (theo thời gian phát hành vé)
+        const ticketsRes = await db.query(
+            "SELECT COUNT(*)::int as total FROM vexemphim WHERE DATE(thoigianphathanh) = $1 AND trangthai = 'active'",
+            [today]
+        );
+
+        // 3. Phim đang chiếu (theo trạng thái now_showing)
+        const moviesRes = await db.query(
+            "SELECT COUNT(*)::int as total FROM phim WHERE trangthai = 'now_showing'"
+        );
+
+        // 4. Tổng khách hàng
+        const customersRes = await db.query("SELECT COUNT(*)::int as total FROM thongtintaikhoan");
+
+        // 5. Phim hot (dựa trên số vé bán ra)
+        const hotMoviesRes = await db.query(`
+            SELECT p.maphim, p.tenphim, p.poster_url, COUNT(v.mavexemphim)::int as so_ve
+            FROM phim p
+            JOIN lichchieu lc ON p.maphim = lc.maphim
+            JOIN vexemphim v ON lc.malichchieu = v.malichchieu
+            JOIN dondatve d ON v.madondatve = d.madondatve AND d.trangthai = 'paid'
+            GROUP BY p.maphim, p.tenphim, p.poster_url
+            ORDER BY so_ve DESC
+            LIMIT 5
+        `);
+
+        res.json({
+            status: 'success',
+            data: {
+                totalRevenueToday: revenueRes.rows[0].total,
+                ticketSoldToday: ticketsRes.rows[0].total,
+                moviesNowShowing: moviesRes.rows[0].total,
+                totalCustomersToday: customersRes.rows[0].total,
+                hotMovies: hotMoviesRes.rows
+            }
+        });
+    } catch (e) {
+        console.error("Dashboard Summary Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi tải dữ liệu tổng quan' });
     }
 };

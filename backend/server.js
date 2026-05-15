@@ -37,6 +37,7 @@ module.exports.io = io;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // --- Routing ---
 app.use('/api/auth', authRoutes);
@@ -50,7 +51,6 @@ app.use('/api/notifications', notificationRoutes);
 
 // TEST TRỰC TIẾP: Cập nhật poster
 app.put('/api/admin/update-poster/:id', (req, res) => {
-  console.log("!!! TEST ROUTE HIT !!! ID:", req.params.id);
   const movieAdminController = require('./controllers/admin/movieAdminController');
   return movieAdminController.updateMoviePoster(req, res);
 });
@@ -62,7 +62,6 @@ app.get('/api/health', (req, res) => {
 
 // Middleware bắt lỗi 404 để debug (Đã dời xuống cuối để không chặn các API trên)
 app.use((req, res, next) => {
-  console.log(`[404] ${req.method} ${req.url} - Không tìm thấy route này!`);
   res.status(404).send(`Cannot ${req.method} ${req.url}`);
 });
 
@@ -72,7 +71,6 @@ app.get('/api/test-db', async (req, res) => {
     const result = await db.query('SELECT NOW() as currentTime');
     res.json({ status: 'success', data: result.rows[0] });
   } catch (error) {
-    console.error('Lỗi khi kết nối DB:', error.message);
     res.status(500).json({ status: 'error', message: 'Không thể kết nối Database. Vui lòng kiểm tra DATABASE_URL trong .env', detail: error.message });
   }
 });
@@ -84,8 +82,6 @@ initSeatSocket(io);
 const { startCleanupJob } = require('./utils/cleanupJob');
 
 // Lắng nghe trên HTTP server (thay vì app.listen)
-server.listen(PORT, () => {
-  console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
-  console.log(`🔌 Socket.IO sẵn sàng tại ws://localhost:${PORT}/booking`);
+server.listen(PORT, '0.0.0.0', () => {
   startCleanupJob();
 });

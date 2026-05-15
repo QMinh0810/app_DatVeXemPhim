@@ -101,6 +101,48 @@ exports.deleteItem = async (req, res) => {
     }
 };
 
+// ======================== ACCESSORIES ========================
+
+/**
+ * Lấy tất cả phụ kiện (items với item_type = 'accessory')
+ * GET /api/admin/accessories
+ */
+exports.getAllAccessories = async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM items WHERE item_type = 'accessory' ORDER BY created_at DESC");
+        res.json({ status: 'success', total: result.rowCount, data: result.rows });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ status: 'error', message: 'Lỗi truy xuất phụ kiện' });
+    }
+};
+
+/**
+ * Thêm phụ kiện mới
+ * POST /api/admin/accessories
+ */
+exports.createAccessory = async (req, res) => {
+    req.body.item_type = 'accessory';
+    return exports.createItem(req, res);
+};
+
+/**
+ * Chỉnh sửa phụ kiện
+ * PUT /api/admin/accessories/:id
+ */
+exports.updateAccessory = async (req, res) => {
+    req.body.item_type = 'accessory';
+    return exports.updateItem(req, res);
+};
+
+/**
+ * Xoá phụ kiện
+ * DELETE /api/admin/accessories/:id
+ */
+exports.deleteAccessory = async (req, res) => {
+    return exports.deleteItem(req, res);
+};
+
 // ======================== COMBOS ========================
 
 /**
@@ -149,9 +191,12 @@ exports.createCombo = async (req, res) => {
         await client.query('BEGIN');
 
         // 1. Tạo combo
+        const defaultImageUrl = "https://images.unsplash.com/photo-1572177191856-3cde618dee1f?q=80&w=500&auto=format&fit=crop";
+        const finalImageUrl = image_url && image_url.trim() !== '' ? image_url : defaultImageUrl;
+
         const comboRes = await client.query(
             'INSERT INTO combos (name, price, description, image_url) VALUES ($1, $2, $3, $4) RETURNING *',
-            [name, price, description || null, image_url || null]
+            [name, price, description || null, finalImageUrl]
         );
         const combo = comboRes.rows[0];
 
@@ -250,5 +295,104 @@ exports.deleteCombo = async (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Không thể xoá vì combo đang được sử dụng trong đơn hàng.' });
         }
         res.status(500).json({ status: 'error', message: 'Lỗi khi xoá combo' });
+    }
+};
+
+// ======================== POS CONCESSIONS ========================
+
+/**
+ * Đặt đồ ăn độc lập tại quầy (POS)
+ * POST /api/admin/pos/concessions/book
+ * Body: { concessions: [{ comboId, quantity, price }] }
+ */
+exports.createPOSConcessionOrder = async (req, res) => {
+    const client = await db.connect();
+    try {
+        const { concessions } = req.body;
+
+        if (!concessions || concessions.length === 0) {
+            return res.status(400).json({ status: 'error', message: 'Vui lòng chọn ít nhất 1 món' });
+        }
+
+        await client.query('BEGIN');
+
+        // 1. Tính tổng tiền
+        let tongtien = 0;
+        for (let c of concessions) {
+            tongtien += (c.price * c.quantity);
+        }
+
+        // 2. Sinh mã đơn đặt vé đặc biệt cho POS (tiền tố POS)
+        const maDonDatVe = 'POS' + Date.now().toString().slice(-7);
+
+        // 3. Insert dondatve (id_khach = req.admin.id - nhân viên quầy)
+        await client.query(
+            `INSERT INTO dondatve (madondatve, tongtien, trangthai, id_khach) VALUES ($1, $2, 'paid', $3)`,
+            [maDonDatVe, tongtien, req.admin.id]
+        );
+
+        // 4. Insert thongtinthanhtoan (Mặc định cash do không cần lưu chi tiết)
+        const maThanhToan = 'PAY' + Date.now().toString().slice(-6);
+        await client.query(
+            `INSERT INTO thongtinthanhtoan (mathanhtoan, phuongthucthanhtoan, sotienthanhtoan, trangthai, madondatve, thoidiemthanhtoan)
+             VALUES ($1, $2, $3, 'success', $4, CURRENT_TIMESTAMP)`,
+            [maThanhToan, 'cash', tongtien, maDonDatVe]
+        );
+
+        // 5. Insert order_concessions
+        for (let c of concessions) {
+            await client.query(
+                `INSERT INTO order_concessions (madondatve, combo_id, quantity, unit_price) VALUES ($1, $2, $3, $4)`,
+                [maDonDatVe, c.comboId, c.quantity, c.price]
+            );
+        }
+
+        await client.query('COMMIT');
+
+        res.status(201).json({ 
+            status: 'success', 
+            message: 'Thanh toán hoá đơn tại quầy thành công', 
+            data: { maDonDatVe, tongtien } 
+        });
+
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error("Create POS Order Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi khi tạo hoá đơn tại quầy' });
+    } finally {
+        client.release();
+    }
+};
+
+/**
+ * Xem lịch sử đơn hàng tại quầy (không có vé phim)
+ * GET /api/admin/pos/concessions/orders
+ */
+exports.getPOSConcessionOrders = async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT d.madondatve, d.ngaydatve, d.tongtien,
+                   COALESCE(
+                       json_agg(
+                           json_build_object(
+                               'combo_id', oc.combo_id,
+                               'name', c.name,
+                               'quantity', oc.quantity,
+                               'unit_price', oc.unit_price
+                           )
+                       ) FILTER (WHERE oc.combo_id IS NOT NULL), '[]'
+                   ) as items
+            FROM dondatve d
+            LEFT JOIN order_concessions oc ON d.madondatve = oc.madondatve
+            LEFT JOIN combos c ON oc.combo_id = c.combo_id
+            WHERE d.madondatve LIKE 'POS%'
+            GROUP BY d.madondatve, d.ngaydatve, d.tongtien
+            ORDER BY d.ngaydatve DESC
+        `);
+
+        res.json({ status: 'success', total: result.rowCount, data: result.rows });
+    } catch (e) {
+        console.error("Get POS Orders Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi truy xuất lịch sử đơn hàng tại quầy' });
     }
 };

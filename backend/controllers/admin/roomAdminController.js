@@ -93,3 +93,27 @@ exports.getSeatsByRoom = async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Lỗi khi lấy danh sách ghế' });
     }
 };
+
+/**
+ * Lấy danh sách phòng theo rạp phim
+ * GET /api/admin/theaters/:id/rooms
+ */
+exports.getRoomsByTheater = async (req, res) => {
+    try {
+        const { id } = req.params; // maRapPhim
+        
+        const result = await db.query(
+            'SELECT * FROM phongrapphim WHERE marapphim = $1 ORDER BY tenphong',
+            [id]
+        );
+
+        res.json({
+            status: 'success',
+            total: result.rowCount,
+            data: result.rows
+        });
+    } catch (e) {
+        console.error("Get Rooms By Theater Error:", e);
+        res.status(500).json({ status: 'error', message: 'Lỗi khi lấy danh sách phòng' });
+    }
+};

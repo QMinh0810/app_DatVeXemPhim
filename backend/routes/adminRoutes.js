@@ -31,6 +31,8 @@ router.post('/showtimes', showtimeAdminController.createShowtime);
 // ==================== PHÒNG RẠP & GHẾ ====================
 // Xem danh sách ghế theo phòng
 router.get('/rooms/:id/seats', roomAdminController.getSeatsByRoom);
+// Xem danh sách phòng theo rạp
+router.get('/theaters/:id/rooms', roomAdminController.getRoomsByTheater);
 // Cập nhật loại ghế (normal/vip/couple/hỏng)
 router.put('/seats/:maGhe/status', roomAdminController.updateSeatType);
 
@@ -43,16 +45,28 @@ router.delete('/customers/:id', customerAdminController.deleteCustomer);
 // ==================== THANH TOÁN ====================
 router.put('/payments/:id/status', customerAdminController.updatePaymentStatus);
 
-// ==================== ĐỒ ĂN & COMBO ====================
+// ==================== ĐỒ ĂN, PHỤ KIỆN & COMBO ====================
+// --- Items chung (Có thể dùng cho food, drink) ---
 router.get('/items', concessionAdminController.getAllItems);
 router.post('/items', concessionAdminController.createItem);
 router.put('/items/:id', concessionAdminController.updateItem);
 router.delete('/items/:id', concessionAdminController.deleteItem);
 
+// --- Phụ kiện riêng ---
+router.get('/accessories', concessionAdminController.getAllAccessories);
+router.post('/accessories', concessionAdminController.createAccessory);
+router.put('/accessories/:id', concessionAdminController.updateAccessory);
+router.delete('/accessories/:id', concessionAdminController.deleteAccessory);
+
+// --- Combos ---
 router.get('/combos', concessionAdminController.getAllCombos);
 router.post('/combos', concessionAdminController.createCombo);
 router.put('/combos/:id', concessionAdminController.updateCombo);
 router.delete('/combos/:id', concessionAdminController.deleteCombo);
+
+// --- POS Độc lập ---
+router.post('/pos/concessions/book', concessionAdminController.createPOSConcessionOrder);
+router.get('/pos/concessions/orders', concessionAdminController.getPOSConcessionOrders);
 
 // ==================== THỐNG KÊ & BÁO CÁO ====================
 router.get('/stats/bookings-by-movie', statsController.bookingsByMovie);
@@ -60,6 +74,7 @@ router.get('/stats/bookings-by-theater', statsController.bookingsByTheater);
 router.get('/stats/revenue-by-movie', statsController.revenueByMovie);
 router.get('/stats/daily-revenue', statsController.dailyRevenueStats);
 router.get('/stats/weekly-revenue', statsController.weeklyRevenueStats);
+router.get('/stats/dashboard-summary', statsController.dashboardSummary);
 router.get('/reports/monthly', statsController.monthlyReport);
 
 // ==================== ĐÁNH GIÁ ====================
