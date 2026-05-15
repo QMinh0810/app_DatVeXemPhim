@@ -68,7 +68,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                   String dateDisplay = '';
                   if (tx['ngayDatVe'] != null) {
                     try {
-                      final dt = DateTime.parse(tx['ngayDatVe']);
+                      final dt = DateTime.parse(tx['ngayDatVe']).toLocal();
                       dateDisplay = DateFormat('dd/MM/yyyy HH:mm').format(dt);
                     } catch (_) {
                       dateDisplay = tx['ngayDatVe'];

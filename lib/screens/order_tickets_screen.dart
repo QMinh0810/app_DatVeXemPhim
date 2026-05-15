@@ -268,7 +268,7 @@ class OrderTicketsScreen extends StatelessWidget {
   String _formatDate(dynamic date) {
     if (date == null || date.toString().isEmpty) return '';
     try {
-      final dt = DateTime.parse(date.toString());
+      final dt = DateTime.parse(date.toString()).toLocal();
       return DateFormat('dd/MM/yyyy').format(dt);
     } catch (_) {
       return date.toString().split('T')[0];
@@ -278,7 +278,7 @@ class OrderTicketsScreen extends StatelessWidget {
   String _formatTime(dynamic time) {
     if (time == null || time.toString().isEmpty) return '';
     try {
-      final dt = DateTime.parse(time.toString());
+      final dt = DateTime.parse(time.toString()).toLocal();
       return DateFormat('HH:mm').format(dt);
     } catch (_) {
       return time.toString();
@@ -289,7 +289,7 @@ class OrderTicketsScreen extends StatelessWidget {
     if (date == null || time == null) return true;
     try {
       final dateStr = date.toString().split('T')[0];
-      final dt = DateTime.parse('${dateStr}T$time');
+      final dt = DateTime.parse('${dateStr}T$time').toLocal();
       return dt.isAfter(DateTime.now());
     } catch (_) {
       return true;

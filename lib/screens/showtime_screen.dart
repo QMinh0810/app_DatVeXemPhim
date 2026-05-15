@@ -63,7 +63,7 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
       final now = DateTime.now();
       final filteredData = (data as List).where((st) {
         if (st['giochieu'] == null) return false;
-        final dt = DateTime.tryParse(st['giochieu'].toString());
+        final dt = DateTime.tryParse(st['giochieu'].toString())?.toLocal();
         if (dt == null) return false;
         return dt.isAfter(now);
       }).toList();
@@ -202,7 +202,7 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
                                         String timeDisplay = '';
                                         String dateLabel = '';
                                         if (st['giochieu'] != null) {
-                                          final dt = DateTime.tryParse(st['giochieu'].toString());
+                                          final dt = DateTime.tryParse(st['giochieu'].toString())?.toLocal();
                                           if (dt != null) {
                                             timeDisplay = DateFormat('HH:mm').format(dt);
                                             dateLabel = DateFormat('dd/MM').format(dt);
