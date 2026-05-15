@@ -590,4 +590,19 @@ class BookingViewModel extends ChangeNotifier {
     _selectedCombos.clear();
     notifyListeners();
   }
+
+  /// Kiểm tra trạng thái đơn hàng (Polling)
+  Future<Map<String, dynamic>> checkBookingStatus(String id) async {
+    return await ApiService.getBookingStatus(id);
+  }
+
+  /// Hủy đơn hàng chủ động
+  Future<bool> cancelBooking(String id) async {
+    try {
+      final res = await ApiService.cancelBooking(id);
+      return res['status'] == 'success';
+    } catch (e) {
+      return false;
+    }
+  }
 }

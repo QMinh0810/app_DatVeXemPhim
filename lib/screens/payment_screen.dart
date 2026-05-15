@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import 'home_screen.dart';
+import 'payment_waiting_screen.dart';
 
 class PaymentScreen extends StatelessWidget {
   const PaymentScreen({super.key});
@@ -111,28 +112,18 @@ class PaymentScreen extends StatelessWidget {
                 final success = await bookingVM.submitBooking();
                 
                 if (success && context.mounted) {
-                  // Nếu có URL thanh toán (VNPay/Momo), thực hiện mở trình duyệt
-                  if (bookingVM.paymentUrl != null) {
-                    final Uri url = Uri.parse(bookingVM.paymentUrl!);
-                    if (await canLaunchUrl(url)) {
-                      await launchUrl(url, mode: LaunchMode.externalApplication);
-                      
-                      // Hiển thị thông báo hướng dẫn người dùng
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Đang chuyển hướng đến cổng thanh toán...'),
-                            backgroundColor: Colors.blue,
-                          ),
-                        );
-                      }
-                    } else {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Không thể mở liên kết thanh toán')),
-                        );
-                      }
-                    }
+                  // Nếu có URL thanh toán (VNPay/Momo), chuyển sang màn hình chờ thanh toán
+                  if (bookingVM.paymentUrl != null && bookingVM.bookingResult != null) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PaymentWaitingScreen(
+                          bookingId: bookingVM.bookingResult!,
+                          payUrl: bookingVM.paymentUrl!,
+                          amount: bookingVM.totalPrice,
+                        ),
+                      ),
+                    );
                   } else {
                     // Thanh toán khác hoặc không cần URL (ví dụ thanh toán tại quầy)
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -141,15 +132,13 @@ class PaymentScreen extends StatelessWidget {
                         backgroundColor: Colors.green,
                       ),
                     );
+                    bookingVM.resetBooking();
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => const HomeScreen()),
+                      (route) => false,
+                    );
                   }
-
-                  // Sau khi xử lý xong (hoặc đã mở trình duyệt), reset và về trang chủ
-                  bookingVM.resetBooking();
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => const HomeScreen()),
-                    (route) => false,
-                  );
                 } else if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(

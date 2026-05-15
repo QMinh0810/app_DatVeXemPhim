@@ -656,7 +656,7 @@ exports.checkBookingStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const result = await db.query(`
-            SELECT trangthai, thoidiemdat, tongtien 
+            SELECT trangthai, ngaydatve, tongtien 
             FROM dondatve 
             WHERE madondatve = $1
         `, [id]);
@@ -669,7 +669,7 @@ exports.checkBookingStatus = async (req, res) => {
         
         // Tính toán thời gian còn lại (giới hạn 10 phút = 600 giây)
         const timeoutSeconds = 600;
-        const startTime = new Date(booking.thoidiemdat).getTime();
+        const startTime = new Date(booking.ngaydatve).getTime();
         const now = new Date().getTime();
         const elapsedSeconds = Math.floor((now - startTime) / 1000);
         const remainingSeconds = Math.max(0, timeoutSeconds - elapsedSeconds);
@@ -683,7 +683,7 @@ exports.checkBookingStatus = async (req, res) => {
         });
     } catch (error) {
         console.error("Check Status Error:", error);
-        res.status(500).json({ message: "Lỗi kiểm tra trạng thái" });
+        res.status(500).json({ message: "Lỗi kiểm tra trạng thái: " + error.message });
     }
 };
 
