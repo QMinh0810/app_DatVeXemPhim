@@ -1,0 +1,294 @@
+2.4.1	Bảng binhluan
+
+Name	Data Type	Allow Nulls
+mabinhluan	character varying (PK)	Primary Key
+maphim	character varying	Not Null
+noidung	character varying	Yes
+danhgia	integer	Not Null
+thoidiemdanhgia	timestamp without time zone	Not Null
+id_khach	integer	Not Null
+id_nhanvien	integer	Yes
+noidungreply	character varying	Yes
+
+2.4.2	Bảng combo_items
+
+Name	Data Type	Allow Nulls
+combo_item_id	integer (PK)	Primary Key
+combo_id	integer	Yes
+item_id	integer	Yes
+quantity	integer	Yes
+
+2.4.3	Bảng combos
+
+Name	Data Type	Allow Nulls
+combo_id	integer (PK)	Primary Key
+name	character varying	Not Null
+price	integer	Not Null
+description	text	Yes
+image_url	text	Yes
+is_available	boolean	Yes
+
+2.4.4	Bảng daodien
+
+Name	Data Type	Allow Nulls
+madaodien	character varying (PK)	Primary Key
+tendaodien	character varying	Not Null
+ngaysinh	timestamp without time zone	Yes
+quoctich	character varying	Yes
+urlanhdaidien	text	Yes
+
+2.4.5	Bảng dienvien
+
+Name	Data Type	Allow Nulls
+madienvien	character varying (PK)	Primary Key
+tendienvien	character varying	Not Null
+ngaysinh	timestamp without time zone	Yes
+quoctich	character varying	Yes
+urlanhdaidien	text	Yes
+
+2.4.6	Bảng dondatve
+
+Name	Data Type	Allow Nulls
+madondatve	character varying (PK)	Primary Key
+ngaydatve	timestamp with time zone	Not Null
+tongtien	integer	Not Null
+trangthai	character varying	Not Null
+id_khach	integer	Not Null
+
+2.4.7	Bảng ghengoi
+
+Name	Data Type	Allow Nulls
+maghe	character varying (PK)	Primary Key
+mahangghe	character varying	Not Null
+soghe	integer	Not Null
+loaighe	character varying	Not Null
+hesogiaghe	numeric	Not Null
+maphong	character varying	Not Null
+
+2.4.8	Bảng hashtag
+
+Name	Data Type	Allow Nulls
+mahashtag	character varying (PK)	Primary Key
+tenhashtag	character varying	Not Null
+
+2.4.9	Bảng items
+
+Name	Data Type	Allow Nulls
+item_id	integer (PK)	Primary Key
+name	character varying	Not Null
+item_type	character varying	Not Null
+price	integer	Not Null
+image_url	text	Yes
+stock_quantity	integer	Yes
+is_available	boolean	Yes
+created_at	timestamp without time zone	Yes
+unit	character varying	Yes
+
+2.4.10	Bảng khuyen_mai
+
+Name	Data Type	Allow Nulls
+id	integer (PK)	Primary Key
+ma_khuyen_mai	character varying	Not Null
+ten_khuyen_mai	character varying	Not Null
+mo_ta	text	Yes
+loai_giam	character varying	Not Null
+gia_tri_giam	numeric	Not Null
+giam_toi_da	numeric	Yes
+gia_tri_don_hang_toi_thieu	numeric	Yes
+so_luong_ve_toi_thieu	integer	Yes
+so_luong_ma	integer	Yes
+so_luong_da_dung	integer	Yes
+so_lan_dung_toi_da_moi_user	integer	Yes
+ngay_bat_dau	timestamp without time zone	Not Null
+ngay_ket_thuc	timestamp without time zone	Not Null
+ap_dung_cho	character varying	Yes
+ap_dung_user	character varying	Yes
+trang_thai	character varying	Yes
+created_at	timestamp without time zone	Yes
+updated_at	timestamp without time zone	Yes
+
+2.4.11	Bảng khuyen_mai_phim
+
+Name	Data Type	Allow Nulls
+id	integer (PK)	Primary Key
+id_khuyen_mai	integer	Not Null
+maphim	character varying	Not Null
+
+2.4.12	Bảng khuyen_mai_user
+
+Name	Data Type	Allow Nulls
+id	integer (PK)	Primary Key
+id_khuyen_mai	integer	Not Null
+id_khach	integer	Not Null
+
+2.4.13	Bảng lich_su_khuyen_mai
+
+Name	Data Type	Allow Nulls
+id	integer (PK)	Primary Key
+id_khuyen_mai	integer	Not Null
+id_khach	integer	Not Null
+madondatve	character varying	Not Null
+gia_tri_giam_thuc_te	numeric	Not Null
+ngay_su_dung	timestamp without time zone	Yes
+
+2.4.14	Bảng lichchieu
+
+Name	Data Type	Allow Nulls
+malichchieu	character varying (PK)	Primary Key
+ngaychieu	timestamp without time zone	Not Null
+giochieu	timestamp without time zone	Not Null
+gioketthuc	timestamp without time zone	Not Null
+giave	integer	Not Null
+maphim	character varying	Not Null
+maphong	character varying	Not Null
+
+2.4.15	Bảng nhanvien
+
+Name	Data Type	Allow Nulls
+id_nhanvien	integer (PK)	Primary Key
+manhanvien	character varying (PK)	Primary Key
+hoten	character varying	Not Null
+ngaysinh	timestamp without time zone	Not Null
+gioitinh	smallint	Yes
+sdt	character varying	Not Null
+email	character varying	Not Null
+matkhau	character varying	Not Null
+anhdaidien	character varying	Yes
+vaitro	character varying	Not Null
+ngaytao	timestamp without time zone	Not Null
+ngaycapnhat	timestamp without time zone	Not Null
+
+2.4.16	Bảng order_concessions
+
+Name	Data Type	Allow Nulls
+id_order_concession	integer (PK)	Primary Key
+madondatve	character varying	Not Null
+item_id	integer	Yes
+combo_id	integer	Yes
+quantity	integer	Not Null
+unit_price	integer	Not Null
+thanh_tien	integer	Yes
+created_at	timestamp without time zone	Yes
+
+2.4.17	Bảng phim
+
+Name	Data Type	Allow Nulls
+maphim	character varying (PK)	Primary Key
+tenphim	character varying	Not Null
+ngayramat	timestamp without time zone	Not Null
+mota	text	Not Null
+thoiluong	integer	Not Null
+gioihantuoi	integer	Not Null
+poster_url	character varying	Not Null
+trailer_url	character varying	Not Null
+trangthai	character varying	Not Null
+duoctaoboi	character varying	Not Null
+duoctaongay	timestamp without time zone	Not Null
+tmdb_id	character varying	Yes
+
+2.4.18	Bảng phim_daodien
+
+Name	Data Type	Allow Nulls
+maphim	character varying (PK)	Primary Key
+madaodien	character varying (PK)	Primary Key
+
+2.4.19	Bảng phim_dienvien
+
+Name	Data Type	Allow Nulls
+madienvien	character varying (PK)	Primary Key
+maphim	character varying (PK)	Primary Key
+
+2.4.20	Bảng phim_hashtag
+
+Name	Data Type	Allow Nulls
+maphim	character varying (PK)	Primary Key
+mahashtag	character varying (PK)	Primary Key
+
+2.4.21	Bảng phim_theloai
+
+Name	Data Type	Allow Nulls
+maphim	character varying (PK)	Primary Key
+matheloai	character varying (PK)	Primary Key
+
+2.4.22	Bảng phongrapphim
+
+Name	Data Type	Allow Nulls
+maphong	character varying (PK)	Primary Key
+tenphong	character varying	Not Null
+soluongghe	integer	Yes
+marapphim	character varying	Not Null
+
+2.4.23	Bảng rapphim
+
+Name	Data Type	Allow Nulls
+marapphim	character varying (PK)	Primary Key
+tenrapphim	character varying	Not Null
+diachi	character varying	Not Null
+
+2.4.24	Bảng rapphim_nhanvien
+
+Name	Data Type	Allow Nulls
+id_nhanvien	integer (PK)	Primary Key
+marapphim	character varying (PK)	Primary Key
+
+2.4.25	Bảng theloai
+
+Name	Data Type	Allow Nulls
+matheloai	character varying (PK)	Primary Key
+tentheloai	character varying	Not Null
+mota	character varying	Yes
+
+2.4.26	Bảng thongbao
+
+Name	Data Type	Allow Nulls
+mathongbao	character varying (PK)	Primary Key
+noidung	character varying	Not Null
+thoidiemtb	timestamp without time zone	Not Null
+trangthai	character varying	Yes
+tieude	character varying	Not Null
+ngaytao	timestamp without time zone	Not Null
+thoidiemxem	timestamp without time zone	Yes
+id_khach	integer	Not Null
+madondatve	character varying	Not Null
+maphim	character varying	Not Null
+
+2.4.27	Bảng thongtintaikhoan
+
+Name	Data Type	Allow Nulls
+id_khach	integer (PK)	Primary Key
+mataikhoan	character varying	Not Null
+hoten	character varying	Not Null
+ngaysinh	timestamp without time zone	Not Null
+gioitinh	smallint	Yes
+sdt	character varying	Not Null
+email	character varying	Not Null
+matkhau	character varying	Not Null
+anhdaidien	character varying	Yes
+ngaytao	timestamp without time zone	Not Null
+ngaycapnhat	timestamp without time zone	Not Null
+trangthai	character varying	Not Null
+
+2.4.28	Bảng thongtinthanhtoan
+
+Name	Data Type	Allow Nulls
+mathanhtoan	character varying (PK)	Primary Key
+phuongthucthanhtoan	character varying	Not Null
+paymentgatewaytransactionid	character varying	Yes
+sotienthanhtoan	integer	Not Null
+thoidiemthanhtoan	timestamp with time zone	Not Null
+trangthai	character varying	Not Null
+madondatve	character varying	Not Null
+
+2.4.29	Bảng vexemphim
+
+Name	Data Type	Allow Nulls
+mavexemphim	character varying (PK)	Primary Key
+qrcode	character varying	Yes
+thoigianphathanh	timestamp with time zone	Not Null
+trangthai	character varying	Not Null
+thoigianhethan	timestamp without time zone	Not Null
+giave	integer	Not Null
+maghe	character varying	Not Null
+malichchieu	character varying	Not Null
+madondatve	character varying	Not Null
+
