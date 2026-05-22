@@ -62,10 +62,24 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
       // Lọc bỏ lịch chiếu quá khứ (không hiển thị suất chiếu đã qua)
       final now = DateTime.now();
       final filteredData = (data as List).where((st) {
-        if (st['giochieu'] == null) return false;
-        final dt = DateTime.tryParse(st['giochieu'].toString())?.toLocal();
-        if (dt == null) return false;
-        return dt.isAfter(now);
+        if (st['giochieu'] == null || st['ngaychieu'] == null) return false;
+        
+        try {
+          // Lấy phần ngày (YYYY-MM-DD) từ ngaychieu
+          final dateDt = DateTime.parse(st['ngaychieu'].toString()).toLocal();
+          final dateStr = DateFormat('yyyy-MM-dd').format(dateDt);
+          
+          // Lấy phần giờ (HH:mm:ss) từ giochieu
+          final timeDt = DateTime.parse(st['giochieu'].toString()).toLocal();
+          final timeStr = DateFormat('HH:mm:ss').format(timeDt);
+          
+          // Kết hợp lại thành Local DateTime chính xác
+          final showtimeDt = DateTime.parse('$dateStr $timeStr');
+          
+          return showtimeDt.isAfter(now);
+        } catch (e) {
+          return false;
+        }
       }).toList();
 
       setState(() {
@@ -198,14 +212,18 @@ class _ShowtimeScreenState extends State<ShowtimeScreen> {
                                         final roomName = st['tenphong'] ?? st['tenPhong'] ?? st['TENPHONG'] ?? 'Phòng chưa rõ';
                                         final price = (st['giave'] ?? 0);
                                         
-                                        // Parse giờ chiếu
+                                        // Parse ngày và giờ chiếu
                                         String timeDisplay = '';
                                         String dateLabel = '';
-                                        if (st['giochieu'] != null) {
-                                          final dt = DateTime.tryParse(st['giochieu'].toString())?.toLocal();
-                                          if (dt != null) {
-                                            timeDisplay = DateFormat('HH:mm').format(dt);
-                                            dateLabel = DateFormat('dd/MM').format(dt);
+                                        if (st['giochieu'] != null && st['ngaychieu'] != null) {
+                                          try {
+                                            final dateDt = DateTime.parse(st['ngaychieu'].toString()).toLocal();
+                                            final timeDt = DateTime.parse(st['giochieu'].toString()).toLocal();
+                                            
+                                            timeDisplay = DateFormat('HH:mm').format(timeDt);
+                                            dateLabel = DateFormat('dd/MM').format(dateDt);
+                                          } catch (e) {
+                                            // Fallback nếu parse lỗi
                                           }
                                         }
 
