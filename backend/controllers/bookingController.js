@@ -726,18 +726,49 @@ async function updateOrderAfterPayment(maDonDatVe, transId) {
         );
 
         // 4. INSERT vé xem phim (trạng thái: active ngay luôn)
-        // Lấy thời gian chiếu để tính toán thoigianhethan
-        const showtimeRes = await client.query('SELECT ngaychieu FROM lichchieu WHERE malichchieu = $1', [showtimeId]);
+        // Lấy thời gian chiếu để tính toán thoigianhethan và thông tin phim/suất chiếu/rạp/phòng
+        const showtimeRes = await client.query(
+            `SELECT lc.ngaychieu, TO_CHAR(lc.giochieu, 'HH24:MI') as giochieu, p.tenphim, pr.tenphong, r.tenrapphim
+             FROM lichchieu lc
+             JOIN phim p ON lc.maphim = p.maphim
+             JOIN phongrapphim pr ON lc.maphong = pr.maphong
+             JOIN rapphim r ON pr.marapphim = r.marapphim
+             WHERE lc.malichchieu = $1`,
+            [showtimeId]
+        );
         const startTime = showtimeRes.rows[0]?.ngaychieu || new Date();
+        const gioChieu = showtimeRes.rows[0]?.giochieu || '';
+        const tenPhim = showtimeRes.rows[0]?.tenphim || '';
+        const tenPhong = showtimeRes.rows[0]?.tenphong || '';
+        const tenRapPhim = showtimeRes.rows[0]?.tenrapphim || '';
         const expireTime = new Date(new Date(startTime).getTime() + 3 * 60 * 60 * 1000); // Hết hạn sau 3h từ lúc chiếu
+
+        // Query thêm tên ghế từ ghengoi
+        const seatInfoRes = await client.query(
+            `SELECT maghe, (mahangghe || soghe) as tenghe FROM ghengoi WHERE maghe = ANY($1::varchar[])`,
+            [seatIds]
+        );
+        const seatMap = {};
+        seatInfoRes.rows.forEach(row => {
+            seatMap[row.maghe] = row.tenghe;
+        });
 
         for (let i = 0; i < seatIds.length; i++) {
             const maVe = 'VE' + Date.now().toString().slice(-4) + i;
             const ticketPrice = seatPrices[seatIds[i]] || basePrice;
+            const tenGhe = seatMap[seatIds[i]] || seatIds[i];
+            const qrData = JSON.stringify({
+                "Tên rạp": tenRapPhim,
+                "Phòng chiếu": tenPhong,
+                "Tên phim": tenPhim,
+                "Mã vé": maVe,
+                "Tên ghế": tenGhe,
+                "Giờ chiếu": gioChieu
+            }, null, 2);
             await client.query(
                 `INSERT INTO vexemphim (mavexemphim, qrcode, giave, maghe, malichchieu, madondatve, trangthai, thoigianhethan)
                  VALUES ($1, $2, $3, $4, $5, $6, 'active', $7)`,
-                [maVe, 'QR_' + maVe, ticketPrice, seatIds[i], showtimeId, maDonDatVe, expireTime]
+                [maVe, qrData, ticketPrice, seatIds[i], showtimeId, maDonDatVe, expireTime]
             );
         }
 
@@ -869,6 +900,68 @@ exports.cancelBooking = async (req, res) => {
     } catch (error) {
         console.error("Lỗi cancelBooking:", error);
         return res.status(500).json({ status: 'error', message: 'Lỗi hệ thống khi hủy đơn hàng' });
+    }
+};
+
+/**
+ * Tra cứu vé bằng QR Code (hỗ trợ cả JSON mới và mã vé/QR cũ)
+ */
+exports.getTicketByQRCode = async (req, res) => {
+    try {
+        const { qrCode } = req.params;
+        if (!qrCode) {
+            return res.status(400).json({ status: 'error', message: 'Thiếu mã QR Code' });
+        }
+
+        let maVe = null;
+        try {
+            const decoded = decodeURIComponent(qrCode);
+            const parsed = JSON.parse(decoded);
+            if (parsed) {
+                maVe = parsed.maVe || parsed["Mã vé"] || parsed["mave"] || parsed["mã vé"];
+            }
+        } catch (e) {
+            try {
+                const parsed = JSON.parse(qrCode);
+                if (parsed) {
+                    maVe = parsed.maVe || parsed["Mã vé"] || parsed["mave"] || parsed["mã vé"];
+                }
+            } catch (err) {}
+        }
+
+        // Truy vấn thông tin vé, rạp, phòng chiếu, ghế và phim để trả về đầy đủ
+        const query = `
+            SELECT v.mavexemphim as "maVe", v.trangthai, v.giave, v.qrcode,
+                   (g.mahangghe || g.soghe) as "tenGhe",
+                   p.tenphim as "tenPhim",
+                   TO_CHAR(lc.giochieu, 'HH24:MI') as "gioChieu",
+                   r.tenrapphim as "tenRapPhim",
+                   r.diachi as "diaChi",
+                   pr.tenphong as "tenPhong",
+                   TO_CHAR(lc.ngaychieu, 'YYYY-MM-DD') as "ngayChieu"
+            FROM vexemphim v
+            LEFT JOIN ghengoi g ON v.maghe = g.maghe
+            JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
+            JOIN phim p ON lc.maphim = p.maphim
+            JOIN phongrapphim pr ON lc.maphong = pr.maphong
+            JOIN rapphim r ON pr.marapphim = r.marapphim
+            WHERE ${maVe ? 'v.mavexemphim = $1' : '(v.qrcode = $1 OR v.mavexemphim = $1)'}
+        `;
+
+        const param = maVe || qrCode;
+        const result = await db.query(query, [param]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ status: 'error', message: 'Không tìm thấy vé tương ứng với QR Code này' });
+        }
+
+        res.json({
+            status: 'success',
+            data: result.rows[0]
+        });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ status: 'error', message: 'Lỗi server khi tra cứu vé' });
     }
 };
 
