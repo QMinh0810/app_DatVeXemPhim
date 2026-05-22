@@ -14,6 +14,28 @@ class SeatSelectionScreen extends StatefulWidget {
 
 class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
+  void _onTimerFinished() {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Hết thời gian giữ ghế'),
+        content: const Text('Thời gian giữ ghế của bạn đã hết. Vui lòng thực hiện lại giao dịch.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Đóng dialog
+              Navigator.of(context).pop(); // Về màn hình trước
+            },
+            child: const Text('XÁC NHẬN'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -162,120 +184,181 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
             onPopInvokedWithResult: (didPop, result) {
               if (didPop) bookingVM.releaseSeats();
             },
-            child: Column(
+            child: Stack(
               children: [
-                // Screen Visual
-                const SizedBox(height: 10),
-                Stack(
-                  alignment: Alignment.topCenter,
+                if (bookingVM.timerActive && bookingVM.secondsRemaining == 0)
+                  FutureBuilder(
+                    future: Future.microtask(() => _onTimerFinished()),
+                    builder: (context, snapshot) => const SizedBox(),
+                  ),
+                Column(
                   children: [
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 40),
-                      height: 50,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            _brandColor.withOpacity(0.12),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                    Column(
+                    // Screen Visual
+                    const SizedBox(height: 10),
+                    Stack(
+                      alignment: Alignment.topCenter,
                       children: [
                         Container(
-                          width: MediaQuery.of(context).size.width * 0.7,
-                          height: 3,
+                          margin: const EdgeInsets.symmetric(horizontal: 40),
+                          height: 50,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE9ECEF),
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(color: _brandColor.withOpacity(0.2), blurRadius: 10, spreadRadius: 1)
-                            ],
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                _brandColor.withOpacity(0.12),
+                                Colors.transparent,
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        const Text('MÀN HÌNH', style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 4)),
+                        Column(
+                          children: [
+                            Container(
+                              width: MediaQuery.of(context).size.width * 0.7,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE9ECEF),
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(color: _brandColor.withOpacity(0.2), blurRadius: 10, spreadRadius: 1)
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text('MÀN HÌNH', style: TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 4)),
+                          ],
+                        ),
                       ],
                     ),
-                  ],
-                ),
-                
-                const SizedBox(height: 20),
-  
-                // Sơ đồ ghế
-                Expanded(
-                  child: InteractiveViewer(
-                    minScale: 0.5,
-                    maxScale: 2.0,
-                    boundaryMargin: const EdgeInsets.all(40),
-                    child: Center(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: SingleChildScrollView(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20.0),
-                            child: Column(
-                              children: rows.map((rowName) {
-                                bool isCoupleRow = false;
-                                for (int col = 1; col <= maxCols; col++) {
-                                  final seat = bookingVM.getSeatAt(rowName, col);
-                                  if (seat != null && seat.loaighe == 'couple') {
-                                    isCoupleRow = true;
-                                    break;
-                                  }
-                                }
-        
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SizedBox(width: 25, child: Text(rowName, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold))),
-                                      ...(isCoupleRow 
-                                        ? List.generate(maxCols ~/ 2, (index) {
-                                            int col = index + 1;
-                                            final seat = bookingVM.getSeatAt(rowName, col);
-                                            Widget seatWidget = seat != null 
-                                                ? SizedBox(width: 70, height: 35, child: _buildCoupleSeat(context, bookingVM, seat))
-                                                : const SizedBox(width: 70, height: 35);
-                                            return [seatWidget];
-                                          }).expand((x) => x).toList()
-                                        : List.generate(maxCols, (colIndex) {
-                                            int col = colIndex + 1;
-                                            final seat = bookingVM.getSeatAt(rowName, col);
-                                            Widget seatWidget = seat != null 
-                                                ? SizedBox(width: 35, height: 35, child: _buildSeat(context, bookingVM, seat))
-                                                : const SizedBox(width: 35, height: 35);
-                                            
-                                            if (col == 4) {
-                                              return [seatWidget, const SizedBox(width: 20)];
-                                            }
-                                            return [seatWidget];
-                                          }).expand((x) => x).toList()
+                    
+                    const SizedBox(height: 20),
+      
+                    // Sơ đồ ghế
+                    Expanded(
+                      child: InteractiveViewer(
+                        minScale: 0.5,
+                        maxScale: 2.0,
+                        boundaryMargin: const EdgeInsets.all(40),
+                        child: Center(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: SingleChildScrollView(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20.0),
+                                child: Column(
+                                  children: rows.map((rowName) {
+                                    bool isCoupleRow = false;
+                                    for (int col = 1; col <= maxCols; col++) {
+                                      final seat = bookingVM.getSeatAt(rowName, col);
+                                      if (seat != null && seat.loaighe == 'couple') {
+                                        isCoupleRow = true;
+                                        break;
+                                      }
+                                    }
+            
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 2.0),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SizedBox(width: 25, child: Text(rowName, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold))),
+                                          ...(isCoupleRow 
+                                            ? List.generate(maxCols ~/ 2, (index) {
+                                                int col = index + 1;
+                                                final seat = bookingVM.getSeatAt(rowName, col);
+                                                Widget seatWidget = seat != null 
+                                                    ? SizedBox(width: 70, height: 35, child: _buildCoupleSeat(context, bookingVM, seat))
+                                                    : const SizedBox(width: 70, height: 35);
+                                                return [seatWidget];
+                                              }).expand((x) => x).toList()
+                                            : List.generate(maxCols, (colIndex) {
+                                                int col = colIndex + 1;
+                                                final seat = bookingVM.getSeatAt(rowName, col);
+                                                Widget seatWidget = seat != null 
+                                                    ? SizedBox(width: 35, height: 35, child: _buildSeat(context, bookingVM, seat))
+                                                    : const SizedBox(width: 35, height: 35);
+                                                
+                                                if (col == 4) {
+                                                  return [seatWidget, const SizedBox(width: 20)];
+                                                }
+                                                return [seatWidget];
+                                              }).expand((x) => x).toList()
+                                          ),
+                                          SizedBox(width: 25, child: Text(rowName, textAlign: TextAlign.right, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold))),
+                                        ],
                                       ),
-                                      SizedBox(width: 25, child: Text(rowName, textAlign: TextAlign.right, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.bold))),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+      
+                    _buildLegend(),
+                  ],
                 ),
-  
-                _buildLegend(),
+                // === FLOATING TIMER ===
+                if (bookingVM.timerActive)
+                  Positioned(
+                    top: 10,
+                    right: 20,
+                    child: _buildCountdownTimer(bookingVM),
+                  ),
               ],
             ),
           ),
           bottomNavigationBar: _buildBottomBar(bookingVM),
         );
       },
+    );
+  }
+
+  Widget _buildCountdownTimer(BookingViewModel bookingVM) {
+    final secondsRemaining = bookingVM.secondsRemaining;
+    final minutes = (secondsRemaining / 60).floor();
+    final seconds = secondsRemaining % 60;
+    final timeStr = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    
+    final bool isLowTime = secondsRemaining < 60;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isLowTime ? Colors.red.withOpacity(0.9) : Colors.black.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white24, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.timer_outlined,
+            size: 16,
+            color: isLowTime ? Colors.white : _brandColor,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            timeStr,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
     );
   }
 

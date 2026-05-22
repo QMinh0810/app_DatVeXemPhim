@@ -56,6 +56,38 @@ class SeatData {
 class BookingViewModel extends ChangeNotifier {
   final SocketService _socketService = SocketService();
   Timer? _heartbeatTimer;
+  Timer? _countdownTimer;
+  int _secondsRemaining = 300;
+  bool _timerActive = false;
+
+  int get secondsRemaining => _secondsRemaining;
+  bool get timerActive => _timerActive;
+
+  void startCountdown() {
+    if (_timerActive) return;
+    _secondsRemaining = 300;
+    _timerActive = true;
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_secondsRemaining > 0) {
+        _secondsRemaining--;
+        notifyListeners();
+      } else {
+        stopCountdown();
+        releaseSeats(); // Giải phóng ghế khi hết thời gian
+        notifyListeners();
+      }
+    });
+    notifyListeners();
+  }
+
+  void stopCountdown() {
+    _countdownTimer?.cancel();
+    _timerActive = false;
+    _secondsRemaining = 300;
+    notifyListeners();
+  }
+
   MovieModel? _selectedMovie;
   final List<String> _selectedSeats = [];
   List<String> _bookedSeats = [];
@@ -333,6 +365,7 @@ class BookingViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _heartbeatTimer?.cancel();
+    _countdownTimer?.cancel();
     _socketService.disconnect();
     super.dispose();
   }
@@ -373,12 +406,23 @@ class BookingViewModel extends ChangeNotifier {
       
       // 2. Gửi lệnh tới server
       _socketService.unlockSeat(_selectedShowtimeId!, seatName);
+
+      // Nếu không còn ghế nào được chọn thì dừng timer? 
+      // (Thường thì timer vẫn chạy nếu đã bắt đầu chọn, nhưng ta có thể reset nếu muốn)
+      if (_selectedSeats.isEmpty) {
+        // stopCountdown(); // Tuỳ chọn
+      }
     } else {
       // KIỂM TRA GIỚI HẠN 6 GHẾ
       if (_selectedSeats.length >= 6) {
         _errorMessage = 'Bạn chỉ được chọn tối đa 6 ghế';
         notifyListeners();
         return;
+      }
+
+      // Bắt đầu timer khi chọn ghế đầu tiên
+      if (_selectedSeats.isEmpty) {
+        startCountdown();
       }
 
       // 1. Phản hồi nhanh: Thêm vào danh sách chọn ngay (màu xanh)
