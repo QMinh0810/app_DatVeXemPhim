@@ -1,3 +1,5 @@
+import 'voucher_model.dart';
+
 class UserModel {
   final String id;
   final String fullName;
@@ -6,6 +8,7 @@ class UserModel {
   final String phone;
   final String email;
   final String? avatarUrl;
+  final UserRank rank;
 
   UserModel({
     required this.id,
@@ -15,10 +18,16 @@ class UserModel {
     required this.phone,
     required this.email,
     this.avatarUrl,
+    this.rank = UserRank.silver,
   });
 
   /// Parse JSON từ Backend API response (login trả user object)
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    UserRank rank = UserRank.silver;
+    final rankStr = (json['rank'] ?? json['hang'] ?? '').toString().toUpperCase();
+    if (rankStr == 'GOLD' || rankStr == 'VÀNG') rank = UserRank.gold;
+    if (rankStr == 'DIAMOND' || rankStr == 'KIM CƯƠNG') rank = UserRank.diamond;
+
     return UserModel(
       id: json['maTaiKhoan'] ?? json['mataikhoan'] ?? '',
       fullName: json['hoTen'] ?? json['hoten'] ?? '',
@@ -29,6 +38,7 @@ class UserModel {
       phone: json['sdt'] ?? '',
       email: json['email'] ?? '',
       avatarUrl: json['anhdaidien'],
+      rank: rank,
     );
   }
 
@@ -40,6 +50,7 @@ class UserModel {
     String? phone,
     String? email,
     String? avatarUrl,
+    UserRank? rank,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -49,6 +60,7 @@ class UserModel {
       phone: phone ?? this.phone,
       email: email ?? this.email,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      rank: rank ?? this.rank,
     );
   }
 }

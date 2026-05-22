@@ -5,6 +5,7 @@ import '../models/movie_model.dart';
 import '../services/api_service.dart';
 import '../models/combo_model.dart';
 import '../services/socket_service.dart';
+import '../models/voucher_model.dart';
 
 /// Model đại diện cho 1 ghế ngồi từ API
 class SeatData {
@@ -105,6 +106,10 @@ class BookingViewModel extends ChangeNotifier {
   String? _bookingResult; // Mã đơn hàng sau khi đặt thành công
   String? _paymentUrl;    // URL thanh toán (VNPay/Momo) nếu có
   
+  // Vouchers
+  VoucherModel? _selectedVoucher;
+  List<VoucherModel> _mockVouchers = [];
+  
   // Combos
   List<ComboData> _availableCombos = [];
   Map<int, int> _selectedCombos = {}; // comboId -> quantity
@@ -127,10 +132,35 @@ class BookingViewModel extends ChangeNotifier {
   String? get paymentUrl => _paymentUrl;
   List<ComboData> get availableCombos => _availableCombos;
   Map<int, int> get selectedCombos => _selectedCombos;
+  VoucherModel? get selectedVoucher => _selectedVoucher;
+  List<VoucherModel> get availableVouchers => _mockVouchers;
 
-  /// Tính tổng tiền vé và combo
-  double get totalPrice {
+  /// Tính tổng tiền vé và combo (chưa trừ voucher)
+  double get subTotal {
     return ticketTotalPrice + comboTotalPrice;
+  }
+
+  /// Tổng tiền cuối cùng sau khi trừ voucher
+  double get totalPrice {
+    return subTotal - discountAmount;
+  }
+
+  /// Số tiền được giảm
+  double get discountAmount {
+    if (_selectedVoucher == null) return 0;
+    
+    double discount = 0;
+    if (_selectedVoucher!.percentage > 0) {
+      discount = subTotal * _selectedVoucher!.percentage;
+      if (discount > _selectedVoucher!.maxDiscount) {
+        discount = _selectedVoucher!.maxDiscount;
+      }
+    } else {
+      discount = _selectedVoucher!.discountAmount;
+    }
+    
+    // Đảm bảo không giảm quá tổng tiền
+    return discount > subTotal ? subTotal : discount;
   }
 
   /// Tổng tiền riêng phần vé
@@ -454,6 +484,64 @@ class BookingViewModel extends ChangeNotifier {
 
   int getComboQuantity(int comboId) {
     return _selectedCombos[comboId] ?? 0;
+  }
+
+  void selectVoucher(VoucherModel? voucher) {
+    _selectedVoucher = voucher;
+    notifyListeners();
+  }
+
+  void fetchVouchers(UserRank userRank) {
+    // Mock data for vouchers based on Shopee style
+    _mockVouchers = [
+      VoucherModel(
+        id: 'SILVER_10',
+        title: 'Bạc: Giảm 10%',
+        description: 'Dành cho hạng Bạc. Giảm tối đa 20k cho đơn từ 100k',
+        percentage: 0.1,
+        maxDiscount: 20000,
+        minOrderValue: 100000,
+        expiryDate: DateTime.now().add(const Duration(days: 7)),
+        type: 'discount',
+        minRank: UserRank.silver,
+      ),
+      VoucherModel(
+        id: 'GOLD_20',
+        title: 'Vàng: Giảm 20%',
+        description: 'Dành cho hạng Vàng. Giảm tối đa 50k cho đơn từ 150k',
+        percentage: 0.2,
+        maxDiscount: 50000,
+        minOrderValue: 150000,
+        expiryDate: DateTime.now().add(const Duration(days: 10)),
+        type: 'discount',
+        minRank: UserRank.gold,
+      ),
+      VoucherModel(
+        id: 'DIAMOND_35',
+        title: 'Kim Cương: Giảm 35%',
+        description: 'Dành cho hạng Kim Cương. Giảm tối đa 100k cho đơn từ 200k',
+        percentage: 0.35,
+        maxDiscount: 100000,
+        minOrderValue: 200000,
+        expiryDate: DateTime.now().add(const Duration(days: 30)),
+        type: 'discount',
+        minRank: UserRank.diamond,
+      ),
+      VoucherModel(
+        id: 'FREESHIP',
+        title: 'Miễn phí vận chuyển',
+        description: 'Giảm tối đa 15k phí bắp nước đơn từ 50k',
+        discountAmount: 15000,
+        minOrderValue: 50000,
+        expiryDate: DateTime.now().add(const Duration(days: 5)),
+        type: 'shipping',
+        minRank: UserRank.silver,
+      ),
+    ];
+
+    // Filter by rank: users can see vouchers of their rank and lower
+    _mockVouchers = _mockVouchers.where((v) => userRank.index >= v.minRank.index).toList();
+    notifyListeners();
   }
 
   Future<void> fetchCombos() async {

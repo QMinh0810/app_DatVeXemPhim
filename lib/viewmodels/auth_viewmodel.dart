@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
+import '../models/voucher_model.dart';
 
 class AuthViewModel extends ChangeNotifier {
   static bool _googleSignInInitialized = false;
@@ -176,6 +177,14 @@ class AuthViewModel extends ChangeNotifier {
       await GoogleSignIn.instance.signOut();
     } catch (_) {}
     
-    notifyListeners();
+  notifyListeners();
+  }
+
+  /// For testing purposes: Manually set the current user's rank
+  void setRank(UserRank rank) {
+    if (_currentUser != null) {
+      _currentUser = _currentUser!.copyWith(rank: rank);
+      notifyListeners();
+    }
   }
 }

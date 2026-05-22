@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../viewmodels/booking_viewmodel.dart';
 import 'home_screen.dart';
 import 'payment_waiting_screen.dart';
+import 'voucher_selector_screen.dart';
 
 class PaymentScreen extends StatelessWidget {
   const PaymentScreen({super.key});
@@ -89,6 +90,24 @@ class PaymentScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          const Text('TẠM TÍNH:', style: TextStyle(fontWeight: FontWeight.w500)),
+                          Text(currencyFormat.format(bookingVM.subTotal)),
+                        ],
+                      ),
+                      if (bookingVM.discountAmount > 0) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('GIẢM GIÁ:', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.green)),
+                            Text('- ${currencyFormat.format(bookingVM.discountAmount)}', style: const TextStyle(color: Colors.green)),
+                          ],
+                        ),
+                      ],
+                      const Divider(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
                           const Text('TỔNG CỘNG:', style: TextStyle(fontWeight: FontWeight.bold)),
                           Text(currencyFormat.format(bookingVM.totalPrice), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE51937), fontSize: 18)),
                         ],
@@ -96,6 +115,51 @@ class PaymentScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                
+                // Voucher Selection Row
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const VoucherSelectorScreen()),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      boxShadow: [
+                        BoxShadow(color: Colors.grey.withOpacity(0.1), spreadRadius: 1, blurRadius: 4, offset: const Offset(0, 2))
+                      ]
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.confirmation_number_outlined, color: Color(0xFFEE4D2D)),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text('Khuyến mãi / Voucher', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                        ),
+                        if (bookingVM.selectedVoucher != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFF00BFA5)),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                            child: Text(
+                              bookingVM.selectedVoucher!.title,
+                              style: const TextStyle(color: Color(0xFF00BFA5), fontSize: 11),
+                            ),
+                          ),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
+                    ),
+                  ),
+                ),
+
                 const SizedBox(height: 24),
                 const Text('PHƯƠNG THỨC THANH TOÁN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
