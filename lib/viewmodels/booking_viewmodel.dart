@@ -63,11 +63,17 @@ class BookingViewModel extends ChangeNotifier {
   int get secondsRemaining => _secondsRemaining;
   bool get timerActive => _timerActive;
 
-  void startCountdown() {
-    if (_timerActive) return;
-    _secondsRemaining = 300;
+  void syncCountdown(int msRemaining) {
+    if (msRemaining <= 0) {
+      stopCountdown();
+      releaseSeats(); // Giải phóng ghế khi hết thời gian
+      return;
+    }
+    
+    _secondsRemaining = (msRemaining / 1000).floor();
     _timerActive = true;
     _countdownTimer?.cancel();
+    
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_secondsRemaining > 0) {
         _secondsRemaining--;
@@ -232,6 +238,8 @@ class BookingViewModel extends ChangeNotifier {
   // ============================================================
 
   void initSocket(String showtimeId) {
+    // Reset timer cũ trước khi khởi tạo socket mới
+    stopCountdown();
     _socketService.connect();
     _socketService.clearListeners();
     
@@ -295,14 +303,36 @@ class BookingViewModel extends ChangeNotifier {
     });
 
     // Xử lý khi mình lock thành công
-    _socketService.onLockSuccess((data) {
-      final String sid = data['seatId'];
-      if (!_selectedSeats.contains(sid)) {
-        _selectedSeats.add(sid);
-      }
-      _updateSeatLockStatus(sid, isLockedByMe: true);
-      notifyListeners();
-    });
+      _socketService.onLockSuccess((data) {
+        final String sid = data['seatId'];
+        // Use default 5 min (300000 ms) if backend didn't send timeout
+        final int earliestTimeoutMs = (data['earliestTimeoutMs'] ?? 300000) as int;
+
+        if (!_selectedSeats.contains(sid)) {
+          _selectedSeats.add(sid);
+        }
+        _updateSeatLockStatus(sid, isLockedByMe: true);
+
+        // Always start or update timer – if it's the first lock or a shorter timeout
+        final int currentMs = _secondsRemaining * 1000;
+        if (currentMs == 0 || earliestTimeoutMs <= currentMs) {
+          syncCountdown(earliestTimeoutMs);
+        }
+
+        notifyListeners();
+      });
+
+    // Lắng nghe cập nhật thời gian timer khi hủy ghế
+      _socketService.onUpdateLockTimer((data) {
+        // If backend provides a timeout, update; otherwise stop timer
+        final int earliestTimeoutMs = data['earliestTimeoutMs'] ?? 0;
+        if (earliestTimeoutMs > 0) {
+          // Update countdown to the new earliest timeout, even if it's later
+          syncCountdown(earliestTimeoutMs);
+        } else {
+          stopCountdown();
+        }
+      });
 
     // Xử lý khi mình lock thất bại (ví dụ tranh chấp)
     _socketService.onLockFailed((data) {
@@ -374,6 +404,7 @@ class BookingViewModel extends ChangeNotifier {
   void releaseSeats() {
     print('🧹 [BookingViewModel] Giải phóng ghế và ngắt kết nối socket');
     _heartbeatTimer?.cancel();
+    stopCountdown();
     
     // Nếu có showtimeId, gửi unlock từng cái (hoặc server tự xử lý khi disconnect)
     // Ở đây ta chọn disconnect để server tự dọn dẹp theo logic auto-unlock
@@ -407,10 +438,9 @@ class BookingViewModel extends ChangeNotifier {
       // 2. Gửi lệnh tới server
       _socketService.unlockSeat(_selectedShowtimeId!, seatName);
 
-      // Nếu không còn ghế nào được chọn thì dừng timer? 
-      // (Thường thì timer vẫn chạy nếu đã bắt đầu chọn, nhưng ta có thể reset nếu muốn)
+      // Nếu không còn ghế nào được chọn thì dừng timer
       if (_selectedSeats.isEmpty) {
-        // stopCountdown(); // Tuỳ chọn
+        stopCountdown(); 
       }
     } else {
       // KIỂM TRA GIỚI HẠN 6 GHẾ
@@ -418,11 +448,6 @@ class BookingViewModel extends ChangeNotifier {
         _errorMessage = 'Bạn chỉ được chọn tối đa 6 ghế';
         notifyListeners();
         return;
-      }
-
-      // Bắt đầu timer khi chọn ghế đầu tiên
-      if (_selectedSeats.isEmpty) {
-        startCountdown();
       }
 
       // 1. Phản hồi nhanh: Thêm vào danh sách chọn ngay (màu xanh)
