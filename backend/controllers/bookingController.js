@@ -4,6 +4,7 @@ const { createNotification } = require('../utils/notificationHelper');
 const vnpayService = require('../utils/vnpayService');
 const momoService = require('../utils/momoService');
 const seatLockService = require('../utils/seatLockService');
+const voucherController = require('./voucherController');
 // io được require lazy để tránh circular dependency
 function getIO() { try { return require('../server').io; } catch { return null; } }
 
@@ -140,7 +141,7 @@ exports.getShowtimes = async (req, res) => {
 // API: Tạo Đơn Đặt Vé (Redis-based — KHÔNG write DB cho đến khi thanh toán thành công)
 exports.createBooking = async (req, res) => {
     try {
-        const { showtimeId, seatIds, paymentMethod, concessions } = req.body;
+        const { showtimeId, seatIds, paymentMethod, concessions, mavoucher } = req.body;
         const userId = String(req.user.id);
 
         if (!seatIds || seatIds.length === 0) {
@@ -173,11 +174,12 @@ exports.createBooking = async (req, res) => {
         }
 
         // 3. Tính tiền vé (READ-ONLY từ DB)
-        const showtimeRes = await db.query('SELECT giave FROM lichchieu WHERE malichchieu = $1', [showtimeId]);
+        const showtimeRes = await db.query('SELECT giave, maphim FROM lichchieu WHERE malichchieu = $1', [showtimeId]);
         if (showtimeRes.rows.length === 0) {
             return res.status(404).json({ status: 'error', message: 'Không tìm thấy suất chiếu' });
         }
         const basePrice = showtimeRes.rows[0].giave;
+        const maphim = showtimeRes.rows[0].maphim;
 
         const seatRes = await db.query('SELECT maghe, hesogiaghe FROM ghengoi WHERE maghe = ANY($1::varchar[])', [seatIds]);
         if (seatRes.rows.length !== seatIds.length) {
@@ -219,7 +221,66 @@ exports.createBooking = async (req, res) => {
             }
         }
 
-        let totalPrice = ticketPriceTotal + concessionPrice;
+        const subtotal = ticketPriceTotal + concessionPrice;
+
+        // 4.5. Tính toán giảm giá Voucher và Rank
+        const discountResult = await voucherController.internalCalculateDiscount(userId, subtotal, mavoucher, maphim);
+
+        // Nếu người dùng nhập mã voucher nhưng không áp dụng thành công được (voucher không hợp lệ/đủ điều kiện)
+        if (mavoucher && !discountResult.appliedVoucherCode) {
+            const voucherRes = await db.query(
+                `SELECT * FROM khuyen_mai WHERE ma_khuyen_mai = $1`,
+                [mavoucher]
+            );
+            if (voucherRes.rows.length === 0) {
+                return res.status(400).json({ status: 'error', message: 'Mã giảm giá không tồn tại hoặc đã hết hạn' });
+            }
+            const v = voucherRes.rows[0];
+            if (v.trang_thai !== 'ACTIVE' || new Date(v.ngay_bat_dau) > new Date() || new Date(v.ngay_ket_thuc) < new Date()) {
+                return res.status(400).json({ status: 'error', message: 'Mã giảm giá đã hết hạn hoặc ngưng hoạt động' });
+            }
+            if (v.so_luong_ma > 0 && v.so_luong_da_dung >= v.so_luong_ma) {
+                return res.status(400).json({ status: 'error', message: 'Mã giảm giá này đã hết lượt sử dụng' });
+            }
+            // Check usage
+            const historyRes = await db.query(
+                'SELECT COUNT(*) FROM lich_su_khuyen_mai WHERE id_khuyen_mai = $1 AND id_khach = $2',
+                [v.id, userId]
+            );
+            if (parseInt(historyRes.rows[0].count) >= 1) {
+                return res.status(400).json({ status: 'error', message: 'Bạn đã sử dụng mã giảm giá này rồi' });
+            }
+            // Check rank
+            if (v.ap_dung_user && v.ap_dung_user !== 'TAT_CA_USER') {
+                const RANK_PRIORITY = { 'BRONZE': 0, 'MEMBER': 0, 'SILVER': 1, 'GOLD': 2, 'DIAMOND': 3 };
+                const RANK_NAMES_VI = { 'BRONZE': 'Đồng', 'MEMBER': 'Đồng', 'SILVER': 'Bạc', 'GOLD': 'Vàng', 'DIAMOND': 'Kim Cương' };
+                const { rank: userRank } = await voucherController.getUserRankInfo(userId);
+                const reqPriority = RANK_PRIORITY[v.ap_dung_user] || 0;
+                const userPriority = RANK_PRIORITY[userRank] || 0;
+                if (userPriority < reqPriority) {
+                    const reqRankName = RANK_NAMES_VI[v.ap_dung_user] || v.ap_dung_user;
+                    return res.status(400).json({ status: 'error', message: `Mã giảm giá này yêu cầu cấp bậc tối thiểu là hạng ${reqRankName}` });
+                }
+            }
+            // Check min spend
+            if (subtotal < parseFloat(v.gia_tri_don_hang_toi_thieu)) {
+                const gap = parseFloat(v.gia_tri_don_hang_toi_thieu) - subtotal;
+                return res.status(400).json({ status: 'error', message: `Bạn cần mua thêm ${gap.toLocaleString('vi-VN')}đ để áp dụng mã này` });
+            }
+            // Check movie
+            if (v.ap_dung_cho === 'PHIM_CU_THE' && maphim) {
+                const phimRes = await db.query(
+                    'SELECT 1 FROM khuyen_mai_phim WHERE id_khuyen_mai = $1 AND maphim = $2',
+                    [v.id, maphim]
+                );
+                if (phimRes.rows.length === 0) {
+                    return res.status(400).json({ status: 'error', message: 'Mã giảm giá này không áp dụng cho bộ phim bạn đã chọn' });
+                }
+            }
+            return res.status(400).json({ status: 'error', message: 'Mã giảm giá không hợp lệ cho đơn hàng này' });
+        }
+
+        const totalPrice = discountResult.finalAmount;
 
         // 5. Sinh mã đơn hàng (dùng làm sessionId cho payment gateway)
         const maDonDatVe = 'DON' + Date.now().toString().slice(-6);
@@ -234,10 +295,19 @@ exports.createBooking = async (req, res) => {
             basePrice,
             concessionDetails,
             totalPrice,
+            originalTotalPrice: subtotal,
             ticketPriceTotal,
             concessionPrice,
             paymentMethod: paymentMethod || 'momo',
             createdAt: new Date().toISOString(),
+            // Thêm các thông tin ưu đãi để lưu khi thanh toán thành công
+            voucherId: discountResult.voucherId,
+            appliedVoucherCode: discountResult.appliedVoucherCode,
+            sotienDuocGiamVoucher: discountResult.sotienDuocGiamVoucher,
+            userRank: discountResult.rank,
+            rankDiscountRate: discountResult.rankDiscountRate,
+            sotienGiamRank: discountResult.sotienGiamRank,
+            totalDiscount: discountResult.totalDiscount
         };
         await seatLockService.createTempBooking(maDonDatVe, sessionData);
 
@@ -705,7 +775,18 @@ async function updateOrderAfterPayment(maDonDatVe, transId) {
         throw new Error(`Session ${maDonDatVe} không tồn tại trong Redis và DB`);
     }
 
-    const { userId, showtimeId, seatIds, seatPrices, basePrice, concessionDetails, totalPrice, paymentMethod } = session;
+    const { 
+        userId, 
+        showtimeId, 
+        seatIds, 
+        seatPrices, 
+        basePrice, 
+        concessionDetails, 
+        totalPrice, 
+        paymentMethod,
+        voucherId,
+        sotienDuocGiamVoucher
+    } = session;
 
     const client = await db.connect();
     try {
@@ -780,6 +861,47 @@ async function updateOrderAfterPayment(maDonDatVe, transId) {
                     [maDonDatVe, c.comboId, c.quantity, c.price]
                 );
             }
+        }
+
+        // 5.5. Nếu có sử dụng voucher, lưu lịch sử sử dụng và cập nhật số lượt dùng của voucher
+        if (voucherId) {
+            await client.query(
+                `INSERT INTO lich_su_khuyen_mai (id_khuyen_mai, id_khach, madondatve, gia_tri_giam_thuc_te, ngay_su_dung)
+                 VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+                [voucherId, userId, maDonDatVe, sotienDuocGiamVoucher || 0]
+            );
+            await client.query(
+                `UPDATE khuyen_mai SET so_luong_da_dung = so_luong_da_dung + 1 WHERE id = $1`,
+                [voucherId]
+            );
+        }
+
+        // 5.6. Cộng dồn doanh thu chi tiêu cho User và cập nhật Rank tự động
+        await client.query(
+            `UPDATE thongtintaikhoan SET tong_chi_tieu = tong_chi_tieu + $1 WHERE id_khach = $2`,
+            [totalPrice, userId]
+        );
+
+        const spendRes = await client.query(
+            `SELECT tong_chi_tieu FROM thongtintaikhoan WHERE id_khach = $1`,
+            [userId]
+        );
+
+        if (spendRes.rows.length > 0) {
+            const currentSpent = parseFloat(spendRes.rows[0].tong_chi_tieu || 0);
+            let nextRank = 'BRONZE';
+            if (currentSpent >= 20000000) {
+                nextRank = 'DIAMOND';
+            } else if (currentSpent >= 10000000) {
+                nextRank = 'GOLD';
+            } else if (currentSpent >= 3000000) {
+                nextRank = 'SILVER';
+            }
+
+            await client.query(
+                `UPDATE thongtintaikhoan SET hang_thanh_vien = $1 WHERE id_khach = $2`,
+                [nextRank, userId]
+            );
         }
 
         await client.query('COMMIT');
