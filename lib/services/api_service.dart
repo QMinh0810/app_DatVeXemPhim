@@ -184,6 +184,15 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
+  /// Tra cứu vé bằng QR Code
+  static Future<Map<String, dynamic>> getTicketByQRCode(String qrCode) async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/bookings/ticket-by-qr/${Uri.encodeComponent(qrCode)}'),
+      headers: _headers,
+    );
+    return jsonDecode(res.body);
+  }
+
   // ==================== CONCESSIONS ====================
 
   /// Lấy danh sách Combo

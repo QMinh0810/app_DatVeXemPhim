@@ -229,6 +229,32 @@ async function hasActiveBookingSession(userId, showtimeId) {
     return false;
 }
 
+/**
+ * Lấy thời gian còn lại (ms) của ghế hết hạn sớm nhất mà user đang giữ
+ * @returns {number} milliseconds còn lại, 0 nếu không có ghế nào
+ */
+async function getUserEarliestSeatTTL(showtimeId, userId) {
+    const userKey = userSeatsKey(showtimeId, userId);
+    const seatIds = await redis.smembers(userKey);
+
+    if (seatIds.length === 0) return 0;
+
+    const pipeline = redis.pipeline();
+    for (const seatId of seatIds) {
+        pipeline.ttl(seatKey(showtimeId, seatId));
+    }
+    const results = await pipeline.exec();
+
+    let minTTL = Infinity;
+    for (const [err, ttl] of results) {
+        if (!err && ttl > 0 && ttl < minTTL) {
+            minTTL = ttl;
+        }
+    }
+
+    return minTTL === Infinity ? 0 : minTTL * 1000; // Convert seconds to ms
+}
+
 module.exports = {
     lockSeat,
     unlockSeat,
@@ -236,6 +262,7 @@ module.exports = {
     getLockedSeats,
     getUserLockedSeats,
     extendUserLocks,
+    getUserEarliestSeatTTL,
     createTempBooking,
     getTempBooking,
     deleteTempBooking,

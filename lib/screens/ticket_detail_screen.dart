@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
@@ -202,7 +203,20 @@ class TicketDetailScreen extends StatelessWidget {
               ]
             ),
             child: QrImageView(
-              data: ticket['qrCode'] ?? ticket['maVe'].toString(),
+              data: () {
+                final qrCodeStr = ticket['qrCode']?.toString() ?? '';
+                if (qrCodeStr.startsWith('{') && qrCodeStr.endsWith('}')) {
+                  return qrCodeStr;
+                }
+                return const JsonEncoder.withIndent('  ').convert({
+                  'Tên rạp': order['tenRapPhim']?.toString() ?? '',
+                  'Phòng chiếu': order['tenPhong']?.toString() ?? '',
+                  'Tên phim': order['tenPhim']?.toString() ?? '',
+                  'Mã vé': ticket['maVe']?.toString() ?? '',
+                  'Tên ghế': ticket['tenGhe']?.toString() ?? '',
+                  'Giờ chiếu': order['gioChieu']?.toString() ?? ''
+                });
+              }(),
               version: QrVersions.auto,
               size: 180.0,
               eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Color(0xFF1A1A1A)),

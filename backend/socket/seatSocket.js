@@ -90,8 +90,11 @@ function initSeatSocket(io) {
                 const success = await seatLockService.lockSeat(showtimeId, seatId, socket.userId);
 
                 if (success) {
-                    // Thông báo cho người lock: thành công
-                    socket.emit('lock_success', { seatId });
+                    // Lấy thời gian còn lại của ghế hết hạn sớm nhất
+                    const earliestTimeoutMs = await seatLockService.getUserEarliestSeatTTL(showtimeId, socket.userId);
+
+                    // Thông báo cho người lock: thành công (kèm thời gian)
+                    socket.emit('lock_success', { seatId, earliestTimeoutMs });
 
                     // Broadcast đến TẤT CẢ người dùng khác trong cùng suất chiếu
                     socket.to(`showtime:${showtimeId}`).emit('seat_locked', {
@@ -99,7 +102,7 @@ function initSeatSocket(io) {
                         isYours: false,
                     });
 
-                    console.log(`[Socket] 🔒 Ghế ${seatId} (suất ${showtimeId}) locked by user ${socket.userId}`);
+                    console.log(`[Socket] 🔒 Ghế ${seatId} (suất ${showtimeId}) locked by user ${socket.userId} | earliestTimeout: ${earliestTimeoutMs}ms`);
                 } else {
                     // Lock thất bại — ghế đã có người
                     socket.emit('lock_failed', {
@@ -123,9 +126,13 @@ function initSeatSocket(io) {
                 const success = await seatLockService.unlockSeat(showtimeId, seatId, socket.userId);
 
                 if (success) {
+                    // Cập nhật lại thời gian của ghế hết hạn sớm nhất cho frontend
+                    const earliestTimeoutMs = await seatLockService.getUserEarliestSeatTTL(showtimeId, socket.userId);
+                    socket.emit('update_lock_timer', { earliestTimeoutMs });
+
                     // Broadcast đến tất cả người trong room
                     bookingNS.to(`showtime:${showtimeId}`).emit('seat_unlocked', { seatId });
-                    console.log(`[Socket] 🔓 Ghế ${seatId} (suất ${showtimeId}) unlocked by user ${socket.userId}`);
+                    console.log(`[Socket] 🔓 Ghế ${seatId} (suất ${showtimeId}) unlocked by user ${socket.userId} | earliestTimeout: ${earliestTimeoutMs}ms`);
                 }
             } catch (err) {
                 console.error('[Socket] Lỗi unlock_seat:', err.message);

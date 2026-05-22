@@ -14,6 +14,7 @@ const userRoutes = require('./routes/userRoutes');
 const concessionRoutes = require('./routes/concessionRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const voucherRoutes = require('./routes/voucherRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -48,6 +49,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/concessions', concessionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/vouchers', voucherRoutes);
 
 // TEST TRỰC TIẾP: Cập nhật poster
 app.put('/api/admin/update-poster/:id', (req, res) => {

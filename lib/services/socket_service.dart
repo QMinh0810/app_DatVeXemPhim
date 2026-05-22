@@ -121,6 +121,10 @@ class SocketService {
     _socket?.on('lock_failed', callback);
   }
 
+  void onUpdateLockTimer(Function(dynamic) callback) {
+    _socket?.on('update_lock_timer', callback);
+  }
+
   /// Hủy đăng ký tất cả listeners cho một suất chiếu (tránh rò rỉ bộ nhớ)
   void clearListeners() {
     _socket?.off('initial_state');
@@ -130,5 +134,6 @@ class SocketService {
     _socket?.off('seats_confirmed');
     _socket?.off('lock_success');
     _socket?.off('lock_failed');
+    _socket?.off('update_lock_timer');
   }
 }
