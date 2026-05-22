@@ -19,9 +19,8 @@ class _VoucherSelectorScreenState extends State<VoucherSelectorScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authVM = Provider.of<AuthViewModel>(context, listen: false);
       final bookingVM = Provider.of<BookingViewModel>(context, listen: false);
-      bookingVM.fetchVouchers(authVM.currentUser?.rank ?? UserRank.silver);
+      bookingVM.fetchAvailableVouchers();
     });
   }
 

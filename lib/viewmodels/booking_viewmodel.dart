@@ -139,20 +139,35 @@ class BookingViewModel extends ChangeNotifier {
   List<ComboData> get availableCombos => _availableCombos;
   Map<int, int> get selectedCombos => _selectedCombos;
   VoucherModel? get selectedVoucher => _selectedVoucher;
-  List<VoucherModel> get availableVouchers => _mockVouchers;
+  List<VoucherModel> get availableVouchers => _availableVouchers;
+  Map<String, dynamic>? get bookingSummary => _bookingSummary;
+
+  List<VoucherModel> _availableVouchers = [];
+  Map<String, dynamic>? _bookingSummary;
+  bool _isApplyingVoucher = false;
+  bool get isApplyingVoucher => _isApplyingVoucher;
 
   /// Tính tổng tiền vé và combo (chưa trừ voucher)
   double get subTotal {
     return ticketTotalPrice + comboTotalPrice;
   }
 
-  /// Tổng tiền cuối cùng sau khi trừ voucher
+  /// Tổng tiền cuối cùng sau khi trừ voucher (và hạng thành viên)
   double get totalPrice {
+    if (_bookingSummary != null) {
+      return (_bookingSummary!['tong_thanh_toan'] ?? subTotal).toDouble();
+    }
     return subTotal - discountAmount;
   }
 
-  /// Số tiền được giảm
+  /// Tổng số tiền được giảm (Voucher + Hạng)
   double get discountAmount {
+    if (_bookingSummary != null) {
+      final rankDiscount = (_bookingSummary!['uu_dai_rank']?['sotien_giam_rank'] ?? 0).toDouble();
+      final voucherDiscount = (_bookingSummary!['voucher_ap_dung']?['sotien_duoc_giam'] ?? 0).toDouble();
+      return rankDiscount + voucherDiscount;
+    }
+
     if (_selectedVoucher == null) return 0;
     
     double discount = 0;
@@ -165,8 +180,12 @@ class BookingViewModel extends ChangeNotifier {
       discount = _selectedVoucher!.discountAmount;
     }
     
-    // Đảm bảo không giảm quá tổng tiền
     return discount > subTotal ? subTotal : discount;
+  }
+
+  /// Thông báo ưu đãi từ Backend (Rank + Voucher)
+  String get discountNotice {
+    return _bookingSummary?['thong_bao_uu_dai'] ?? '';
   }
 
   /// Tổng tiền riêng phần vé
@@ -513,59 +532,54 @@ class BookingViewModel extends ChangeNotifier {
 
   void selectVoucher(VoucherModel? voucher) {
     _selectedVoucher = voucher;
+    if (voucher != null) {
+      applyVoucher(voucher.id);
+    } else {
+      _bookingSummary = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchAvailableVouchers() async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final res = await ApiService.fetchAvailableVouchers(
+        totalPrice: subTotal,
+        showtimeId: _selectedShowtimeId,
+      );
+      if (res['status'] == 'success') {
+        final List vouchersData = res['available_vouchers'] ?? [];
+        _availableVouchers = vouchersData.map((v) => VoucherModel.fromJson(v)).toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching vouchers: $e');
+    }
+    _isLoading = false;
     notifyListeners();
   }
 
-  void fetchVouchers(UserRank userRank) {
-    // Mock data for vouchers based on Shopee style
-    _mockVouchers = [
-      VoucherModel(
-        id: 'SILVER_10',
-        title: 'Bạc: Giảm 10%',
-        description: 'Dành cho hạng Bạc. Giảm tối đa 20k cho đơn từ 100k',
-        percentage: 0.1,
-        maxDiscount: 20000,
-        minOrderValue: 100000,
-        expiryDate: DateTime.now().add(const Duration(days: 7)),
-        type: 'discount',
-        minRank: UserRank.silver,
-      ),
-      VoucherModel(
-        id: 'GOLD_20',
-        title: 'Vàng: Giảm 20%',
-        description: 'Dành cho hạng Vàng. Giảm tối đa 50k cho đơn từ 150k',
-        percentage: 0.2,
-        maxDiscount: 50000,
-        minOrderValue: 150000,
-        expiryDate: DateTime.now().add(const Duration(days: 10)),
-        type: 'discount',
-        minRank: UserRank.gold,
-      ),
-      VoucherModel(
-        id: 'DIAMOND_35',
-        title: 'Kim Cương: Giảm 35%',
-        description: 'Dành cho hạng Kim Cương. Giảm tối đa 100k cho đơn từ 200k',
-        percentage: 0.35,
-        maxDiscount: 100000,
-        minOrderValue: 200000,
-        expiryDate: DateTime.now().add(const Duration(days: 30)),
-        type: 'discount',
-        minRank: UserRank.diamond,
-      ),
-      VoucherModel(
-        id: 'FREESHIP',
-        title: 'Miễn phí vận chuyển',
-        description: 'Giảm tối đa 15k phí bắp nước đơn từ 50k',
-        discountAmount: 15000,
-        minOrderValue: 50000,
-        expiryDate: DateTime.now().add(const Duration(days: 5)),
-        type: 'shipping',
-        minRank: UserRank.silver,
-      ),
-    ];
-
-    // Filter by rank: users can see vouchers of their rank and lower
-    _mockVouchers = _mockVouchers.where((v) => userRank.index >= v.minRank.index).toList();
+  Future<void> applyVoucher(String mavoucher) async {
+    _isApplyingVoucher = true;
+    notifyListeners();
+    try {
+      final res = await ApiService.applyVoucher(
+        mavoucher: mavoucher,
+        tamTinh: subTotal,
+        showtimeId: _selectedShowtimeId,
+      );
+      if (res['status'] == 'success') {
+        _bookingSummary = res['booking_summary'];
+      } else {
+        _errorMessage = res['message'] ?? 'Không thể áp dụng mã này';
+        _bookingSummary = null;
+        _selectedVoucher = null;
+      }
+    } catch (e) {
+      _errorMessage = 'Lỗi kết nối khi áp dụng voucher';
+      _selectedVoucher = null;
+    }
+    _isApplyingVoucher = false;
     notifyListeners();
   }
 
@@ -676,6 +690,7 @@ class BookingViewModel extends ChangeNotifier {
         seatIds: _selectedSeats,
         paymentMethod: _paymentMethod,
         concessions: concessions.isNotEmpty ? concessions : null,
+        mavoucher: _selectedVoucher?.id,
       );
 
       _isLoading = false;

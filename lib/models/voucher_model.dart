@@ -29,7 +29,7 @@ class VoucherModel {
   final String title;
   final String description;
   final double discountAmount;
-  final double percentage; // 0.0 to 1.0
+  final double percentage; // 0.0 to 1.0 (e.g. 0.1 for 10%)
   final double minOrderValue;
   final double maxDiscount;
   final DateTime expiryDate;
@@ -37,6 +37,8 @@ class VoucherModel {
   final UserRank minRank;
   final String? imageUrl;
   final bool isSelected;
+  final bool isEligible;
+  final String? reason;
 
   VoucherModel({
     required this.id,
@@ -51,7 +53,33 @@ class VoucherModel {
     required this.minRank,
     this.imageUrl,
     this.isSelected = false,
+    this.isEligible = true,
+    this.reason,
   });
+
+  factory VoucherModel.fromJson(Map<String, dynamic> json) {
+    UserRank rank = UserRank.silver;
+    final rankStr = json['dieukien_rank']?.toString().toUpperCase() ?? 'TAT_CA_USER';
+    if (rankStr == 'GOLD') rank = UserRank.gold;
+    if (rankStr == 'DIAMOND') rank = UserRank.diamond;
+
+    return VoucherModel(
+      id: json['mavoucher']?.toString() ?? '',
+      title: json['ten']?.toString() ?? '',
+      description: json['mota']?.toString() ?? '',
+      discountAmount: (json['sotien_giam'] ?? 0).toDouble(),
+      percentage: (json['phantram_giam'] ?? 0).toDouble(),
+      minOrderValue: (json['donhang_toithieu'] ?? 0).toDouble(),
+      maxDiscount: (json['giam_toi_da'] ?? double.infinity).toDouble(),
+      expiryDate: json['han_sudung'] != null 
+          ? DateTime.tryParse(json['han_sudung'].toString()) ?? DateTime.now()
+          : DateTime.now(),
+      type: json['loai']?.toString() ?? 'discount',
+      minRank: rank,
+      isEligible: json['is_eligible'] ?? true,
+      reason: json['reason']?.toString(),
+    );
+  }
 
   VoucherModel copyWith({bool? isSelected}) {
     return VoucherModel(
@@ -67,6 +95,8 @@ class VoucherModel {
       minRank: minRank,
       imageUrl: imageUrl,
       isSelected: isSelected ?? this.isSelected,
+      isEligible: isEligible,
+      reason: reason,
     );
   }
 }

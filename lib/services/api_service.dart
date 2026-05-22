@@ -152,6 +152,7 @@ class ApiService {
     required List<String> seatIds,
     String paymentMethod = 'momo',
     List<Map<String, dynamic>>? concessions,
+    String? mavoucher,
   }) async {
     final res = await http.post(
       Uri.parse('$baseUrl/bookings/book'),
@@ -161,6 +162,7 @@ class ApiService {
         'seatIds': seatIds,
         'paymentMethod': paymentMethod,
         if (concessions != null) 'concessions': concessions,
+        if (mavoucher != null) 'mavoucher': mavoucher,
       }),
     );
     return jsonDecode(res.body);
@@ -336,6 +338,37 @@ class ApiService {
   /// Xóa tất cả thông báo
   static Future<Map<String, dynamic>> deleteAllNotifications() async {
     final res = await http.delete(Uri.parse('$baseUrl/notifications/all'), headers: _headers);
+    return jsonDecode(res.body);
+  }
+
+  // ==================== VOUCHERS ====================
+
+  /// Lấy danh sách Voucher khả dụng cho người dùng khi đặt vé
+  static Future<Map<String, dynamic>> fetchAvailableVouchers({double? totalPrice, String? showtimeId}) async {
+    final params = <String, String>{};
+    if (totalPrice != null) params['totalPrice'] = totalPrice.toString();
+    if (showtimeId != null) params['showtimeId'] = showtimeId;
+    final uri = Uri.parse('$baseUrl/vouchers/available').replace(queryParameters: params);
+
+    final res = await http.get(uri, headers: _headers);
+    return jsonDecode(res.body);
+  }
+
+  /// Áp dụng thử mã giảm giá để xem Booking Summary tạm tính
+  static Future<Map<String, dynamic>> applyVoucher({
+    required String mavoucher,
+    required double tamTinh,
+    String? showtimeId,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/vouchers/apply'),
+      headers: _headers,
+      body: jsonEncode({
+        'mavoucher': mavoucher,
+        'tam_tinh': tamTinh,
+        if (showtimeId != null) 'showtimeId': showtimeId,
+      }),
+    );
     return jsonDecode(res.body);
   }
 }

@@ -94,7 +94,45 @@ class PaymentScreen extends StatelessWidget {
                           Text(currencyFormat.format(bookingVM.subTotal)),
                         ],
                       ),
-                      if (bookingVM.discountAmount > 0) ...[
+                      
+                      // Rank Discount
+                      if (bookingVM.bookingSummary?['uu_dai_rank'] != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Hạng ${bookingVM.bookingSummary!['uu_dai_rank']['ten_rank']}:',
+                              style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.green),
+                            ),
+                            Text(
+                              '- ${currencyFormat.format(bookingVM.bookingSummary!['uu_dai_rank']['sotien_giam_rank'])}',
+                              style: const TextStyle(color: Colors.green),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      // Voucher Discount
+                      if (bookingVM.bookingSummary?['voucher_ap_dung'] != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Voucher (${bookingVM.bookingSummary!['voucher_ap_dung']['mavoucher']}):',
+                              style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.green),
+                            ),
+                            Text(
+                              '- ${currencyFormat.format(bookingVM.bookingSummary!['voucher_ap_dung']['sotien_duoc_giam'])}',
+                              style: const TextStyle(color: Colors.green),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      // If no summary yet but there's a selected voucher (fallback)
+                      if (bookingVM.bookingSummary == null && bookingVM.discountAmount > 0) ...[
                         const SizedBox(height: 8),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -104,14 +142,42 @@ class PaymentScreen extends StatelessWidget {
                           ],
                         ),
                       ],
+
                       const Divider(height: 24),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('TỔNG CỘNG:', style: TextStyle(fontWeight: FontWeight.bold)),
-                          Text(currencyFormat.format(bookingVM.totalPrice), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE51937), fontSize: 18)),
+                          Text(
+                            currencyFormat.format(bookingVM.totalPrice),
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFE51937), fontSize: 18),
+                          ),
                         ],
-                      )
+                      ),
+                      
+                      if (bookingVM.discountNotice.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    bookingVM.discountNotice,
+                                    style: TextStyle(fontSize: 12, color: Colors.blue[900], fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
