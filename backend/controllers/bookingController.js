@@ -333,7 +333,28 @@ exports.createBooking = async (req, res) => {
 
         // Đã dời thông báo sang sau khi thanh toán thành công để tránh lỗi Foreign Key
 
-        const TTL = seatLockService.TTL;
+                const TTL = seatLockService.TTL;
+        // Kiểm tra có yêu cầu preview (lưu và trả về đơn ngay) không
+        const preview = req.query.preview === 'true' || req.query.preview === '1';
+        if (preview) {
+            // Gọi hàm cập nhật đơn vào DB ngay lập tức (không cần chờ IPN)
+            await updateOrderAfterPayment(maDonDatVe, 'TEST_TRANS');
+            // Lấy thông tin đơn đã lưu
+            const orderRes = await db.query('SELECT * FROM dondatve WHERE madondatve = $1', [maDonDatVe]);
+            const orderData = orderRes.rows[0] || {};
+            return res.status(201).json({
+                status: 'success',
+                message: `Đơn hàng đã được tạo và lưu (preview).`,
+                data: {
+                    maDonDatVe,
+                    totalPrice,
+                    paymentUrl,
+                    expiresAt: new Date(Date.now() + TTL * 1000).toISOString(),
+                    order: orderData
+                }
+            });
+        }
+        // Trường hợp không preview – trả về thông tin giữ ghế và URL thanh toán như bình thường
         res.status(201).json({ 
             status: 'success', 
             message: `Giữ ghế thành công! Vui lòng hoàn tất thanh toán trong ${Math.floor(TTL/60)} phút.`, 
