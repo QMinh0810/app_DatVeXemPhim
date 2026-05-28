@@ -11,6 +11,7 @@ const customerAdminController = require('../controllers/admin/customerAdminContr
 const concessionAdminController = require('../controllers/admin/concessionAdminController');
 const statsController = require('../controllers/admin/statsController');
 const reviewAdminController = require('../controllers/admin/reviewAdminController');
+const userAdminController = require('../controllers/admin/userAdminController');
 
 // ==================== AUTH (Không cần isAdmin) ====================
 router.post('/login', adminAuthController.login);
@@ -18,12 +19,27 @@ router.post('/login', adminAuthController.login);
 // ==================== Tất cả route bên dưới yêu cầu isAdmin ====================
 router.use(isAdmin);
 
-// ĐƯA LÊN ĐẦU: Cập nhật poster
-router.put('/update-poster/:id', movieAdminController.updateMoviePoster);
+// ==================== DASHBOARD (statsController) ====================
+// GET /stats/dashboard-summary, /stats/weekly-revenue, ...
 
-// ==================== PHIM & HASHTAG ====================
+// ==================== QUẢN LÝ PHIM (TMDB + CRUD) ====================
+router.get('/movies', movieAdminController.getAllMovies);
+router.get('/movies/tmdb/trending', movieAdminController.getTMDBTrending);
+router.get('/movies/tmdb/search', movieAdminController.searchTMDB);
+router.post('/movies/import-tmdb', movieAdminController.importFromTMDB);
+router.put('/movies/:id', movieAdminController.updateMovie);
+router.delete('/movies/:id', movieAdminController.deleteMovie);
+
+router.put('/update-poster/:id', movieAdminController.updateMoviePoster);
 router.post('/movies/:id/hashtags', movieAdminController.addHashtagToMovie);
 router.delete('/movies/:id/hashtags/:hashtagId', movieAdminController.removeHashtagFromMovie);
+
+// ==================== QUẢN LÝ NGƯỜI DÙNG (Nhân viên + Khách) ====================
+router.get('/users', userAdminController.getAllUsers);
+router.put('/users/:id', userAdminController.updateUser);
+router.put('/users/:id/status', userAdminController.updateUserStatus);
+router.put('/users/:id/password', userAdminController.changeUserPassword);
+router.delete('/users/:id', userAdminController.deleteUser);
 
 // ==================== LỊCH CHIẾU ====================
 router.post('/showtimes', showtimeAdminController.createShowtime);

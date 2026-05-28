@@ -97,6 +97,10 @@ class SocketService {
     _socket?.on('initial_state', callback);
   }
 
+  void onSeatsPaying(Function(dynamic) callback) {
+    _socket?.on('seats_paying', callback);
+  }
+
   void onSeatLocked(Function(dynamic) callback) {
     _socket?.on('seat_locked', callback);
   }
@@ -128,6 +132,7 @@ class SocketService {
   /// Hủy đăng ký tất cả listeners cho một suất chiếu (tránh rò rỉ bộ nhớ)
   void clearListeners() {
     _socket?.off('initial_state');
+    _socket?.off('seats_paying');
     _socket?.off('seat_locked');
     _socket?.off('seat_unlocked');
     _socket?.off('seats_unlocked_batch');

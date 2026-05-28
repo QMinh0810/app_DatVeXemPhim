@@ -13,10 +13,6 @@ const userSeatsKey = (showtimeId, userId) => `user:seats:${showtimeId}:${userId}
 // SEAT LOCK OPERATIONS
 // ============================================================
 
-/**
- * Lock 1 ghế bằng Lua script atomic (tránh race condition)
- * @returns {boolean} true nếu lock thành công, false nếu đã có người lock
- */
 async function lockSeat(showtimeId, seatId, userId) {
     const key = seatKey(showtimeId, seatId);
 
@@ -28,12 +24,15 @@ async function lockSeat(showtimeId, seatId, userId) {
             redis.call('SADD', KEYS[2], ARGV[3])
             redis.call('EXPIRE', KEYS[2], ARGV[2])
             return 1
-        elseif existing == ARGV[1] then
-            -- Đã lock bởi cùng user → gia hạn TTL
-            redis.call('EXPIRE', KEYS[1], ARGV[2])
-            return 1
         else
-            return 0
+            local prefix = ARGV[4]
+            if string.sub(existing, 1, string.len(prefix)) == prefix then
+                -- Đã lock bởi cùng user → gia hạn TTL
+                redis.call('EXPIRE', KEYS[1], ARGV[2])
+                return 1
+            else
+                return 0
+            end
         end
     `;
 
@@ -42,9 +41,10 @@ async function lockSeat(showtimeId, seatId, userId) {
         2,
         key,
         userSeatsKey(showtimeId, userId),
-        userId,
+        `${userId}:holding`,
         String(TTL),
-        seatId
+        seatId,
+        `${userId}:`
     );
 
     return result === 1;
@@ -59,7 +59,11 @@ async function unlockSeat(showtimeId, seatId, userId) {
 
     const luaScript = `
         local existing = redis.call('GET', KEYS[1])
-        if existing == ARGV[1] then
+        if existing == false then
+            return 0
+        end
+        local prefix = ARGV[1]
+        if string.sub(existing, 1, string.len(prefix)) == prefix then
             redis.call('DEL', KEYS[1])
             redis.call('SREM', KEYS[2], ARGV[2])
             return 1
@@ -73,7 +77,7 @@ async function unlockSeat(showtimeId, seatId, userId) {
         2,
         key,
         userSeatsKey(showtimeId, userId),
-        userId,
+        `${userId}:`,
         seatId
     );
 
@@ -101,7 +105,7 @@ async function unlockAllUserSeats(showtimeId, userId) {
 
 /**
  * Lấy danh sách tất cả ghế đang bị lock trong 1 suất chiếu
- * @returns {Array<{seatId, lockedBy}>}
+ * @returns {Array<{seatId, lockedBy, status, bookingCode}>}
  */
 async function getLockedSeats(showtimeId) {
     // Scan keys theo pattern seat:lock:{showtimeId}:*
@@ -116,10 +120,17 @@ async function getLockedSeats(showtimeId) {
     }
     const values = await pipeline.exec();
 
-    return keys.map((key, index) => ({
-        seatId: key.split(':').pop(), // Lấy phần cuối của key
-        lockedBy: values[index][1],   // userId
-    }));
+    return keys.map((key, index) => {
+        const val = values[index][1];
+        if (!val) return null;
+        const parts = val.split(':');
+        return {
+            seatId: key.split(':').pop(), // Lấy phần cuối của key
+            lockedBy: parts[0],           // userId
+            status: parts[1] || 'holding',// status
+            bookingCode: parts[2] || '',  // bookingCode
+        };
+    }).filter(Boolean);
 }
 
 /**
@@ -131,7 +142,7 @@ async function getUserLockedSeats(showtimeId, userId) {
 }
 
 /**
- * Gia hạn TTL cho tất cả ghế của user (gọi khi user bắt đầu thanh toán)
+ * Gia hạn TTL cho tất cả ghế của user (gọi khi user đang giữ ghế chọn)
  */
 async function extendUserLocks(showtimeId, userId) {
     const userKey = userSeatsKey(showtimeId, userId);
@@ -139,11 +150,39 @@ async function extendUserLocks(showtimeId, userId) {
 
     if (seatIds.length === 0) return false;
 
+    // Chỉ gia hạn nếu ghế ở trạng thái 'holding' (không đè lên trạng thái 'paying' có TTL riêng)
+    const luaScript = `
+        local existing = redis.call('GET', KEYS[1])
+        if existing then
+            if string.find(existing, ':holding') then
+                redis.call('EXPIRE', KEYS[1], ARGV[1])
+            end
+        end
+    `;
+
     const pipeline = redis.pipeline();
     for (const seatId of seatIds) {
-        pipeline.expire(seatKey(showtimeId, seatId), TTL);
+        pipeline.eval(luaScript, 1, seatKey(showtimeId, seatId), String(TTL));
     }
     pipeline.expire(userKey, TTL);
+    await pipeline.exec();
+
+    return true;
+}
+
+/**
+ * Cập nhật trạng thái ghế sang 'paying' khi bắt đầu thanh toán
+ */
+async function setSeatsPayingStatus(showtimeId, seatIds, userId, bookingCode) {
+    const userKey = userSeatsKey(showtimeId, userId);
+    const payTTL = 300; // Giảm xuống 5 phút theo yêu cầu của user
+
+    const pipeline = redis.pipeline();
+    for (const seatId of seatIds) {
+        const key = seatKey(showtimeId, seatId);
+        pipeline.set(key, `${userId}:paying:${bookingCode}`, 'EX', payTTL);
+    }
+    pipeline.expire(userKey, payTTL);
     await pipeline.exec();
 
     return true;
@@ -262,6 +301,7 @@ module.exports = {
     getLockedSeats,
     getUserLockedSeats,
     extendUserLocks,
+    setSeatsPayingStatus,
     getUserEarliestSeatTTL,
     createTempBooking,
     getTempBooking,

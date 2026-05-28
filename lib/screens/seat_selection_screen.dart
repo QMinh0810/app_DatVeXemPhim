@@ -64,7 +64,12 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     if (seat.isBroken) return _brokenColor;
     if (seat.isBooked) return _bookedColor;
     if (seat.isLockedByMe || isSelected) return _selectedColor;
-    if (seat.isLockedByOther) return _lockedByOtherColor;
+    if (seat.isLockedByOther) {
+      if (seat.status == 'paying') {
+        return const Color(0xFFFFB74D); // Cam nhạt (đang thanh toán)
+      }
+      return _lockedByOtherColor;
+    }
 
     switch (seat.loaighe) {
       case 'vip': return _vipColor;
@@ -103,7 +108,9 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
           visible: !seat.isBooked && !seat.isLockedByOther && !seat.isBroken,
           replacement: seat.isBooked 
             ? const Icon(Icons.close, size: 8, color: Colors.white70) 
-            : const SizedBox(),
+            : (seat.isLockedByOther && seat.status == 'paying')
+                ? const Icon(Icons.payment, size: 8, color: Colors.white70)
+                : const SizedBox(),
           child: Text(
             seat.displayName,
             style: TextStyle(
@@ -161,30 +168,28 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
 
         final rows = bookingVM.seatRows;
         final maxCols = bookingVM.maxCols;
-
-        return Scaffold(
-          backgroundColor: Colors.white,
-          appBar: AppBar(
-            title: Column(
-              children: [
-                Text(bookingVM.selectedMovie?.title ?? 'Chọn ghế', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
-                Text('${bookingVM.selectedTheaterName} | ${bookingVM.selectedRoomName}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        return PopScope(
+          onPopInvoked: (didPop) {
+            if (didPop) bookingVM.releaseSeats();
+          },
+          child: Scaffold(
+            backgroundColor: Colors.white,
+            appBar: AppBar(
+              title: Column(
+                children: [
+                  Text(bookingVM.selectedMovie?.title ?? 'Chọn ghế', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+                  Text('${bookingVM.selectedTheaterName} | ${bookingVM.selectedRoomName}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                ],
+              ),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              centerTitle: true,
+              iconTheme: const IconThemeData(color: Colors.black),
+              actions: [
+                IconButton(onPressed: () => bookingVM.fetchSeatMap(), icon: const Icon(Icons.refresh, size: 20)),
               ],
             ),
-            backgroundColor: Colors.white,
-            elevation: 0,
-            centerTitle: true,
-            iconTheme: const IconThemeData(color: Colors.black),
-            actions: [
-              IconButton(onPressed: () => bookingVM.fetchSeatMap(), icon: const Icon(Icons.refresh, size: 20)),
-            ],
-          ),
-          body: PopScope(
-            canPop: true,
-            onPopInvokedWithResult: (didPop, result) {
-              if (didPop) bookingVM.releaseSeats();
-            },
-            child: Stack(
+            body: Stack(
               children: [
                 if (bookingVM.timerActive && bookingVM.secondsRemaining == 0)
                   FutureBuilder(
@@ -310,8 +315,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                   ),
               ],
             ),
+            bottomNavigationBar: _buildBottomBar(bookingVM),
           ),
-          bottomNavigationBar: _buildBottomBar(bookingVM),
         );
       },
     );

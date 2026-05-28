@@ -15,6 +15,7 @@ const concessionRoutes = require('./routes/concessionRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const voucherRoutes = require('./routes/voucherRoutes');
+const phimAdminRoutes = require('./routes/phimAdminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -50,12 +51,13 @@ app.use('/api/concessions', concessionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/vouchers', voucherRoutes);
+const ticketWebRoutes = require('./routes/ticketWebRoutes');
 
-// TEST TRỰC TIẾP: Cập nhật poster
-app.put('/api/admin/update-poster/:id', (req, res) => {
-  const movieAdminController = require('./controllers/admin/movieAdminController');
-  return movieAdminController.updateMoviePoster(req, res);
-});
+// Web Admin — tương thích route /api/phim (TMDB + CRUD)
+app.use('/api/phim', phimAdminRoutes);
+
+// Giao diện web hiển thị vé
+app.use('/ticket', ticketWebRoutes);
 
 // API: Kiểm tra Health
 app.get('/api/health', (req, res) => {

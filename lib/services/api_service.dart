@@ -67,12 +67,22 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
-  /// Reset mật khẩu
-  static Future<Map<String, dynamic>> resetPassword(String email, String otp, String newPassword) async {
+  /// Xác minh OTP
+  static Future<Map<String, dynamic>> verifyOTP(String email, String otp) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/auth/verify-otp'),
+      headers: _headers,
+      body: jsonEncode({'email': email, 'otp': otp}),
+    );
+    return jsonDecode(res.body);
+  }
+
+  /// Reset mật khẩu bằng Token tạm thời
+  static Future<Map<String, dynamic>> resetPassword(String token, String newPassword) async {
     final res = await http.post(
       Uri.parse('$baseUrl/auth/reset-password'),
       headers: _headers,
-      body: jsonEncode({'email': email, 'otp': otp, 'newPassword': newPassword}),
+      body: jsonEncode({'token': token, 'newPassword': newPassword}),
     );
     return jsonDecode(res.body);
   }

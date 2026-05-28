@@ -7,8 +7,25 @@ import 'home_screen.dart';
 import 'payment_waiting_screen.dart';
 import 'voucher_selector_screen.dart';
 
-class PaymentScreen extends StatelessWidget {
+class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
+
+  @override
+  State<PaymentScreen> createState() => _PaymentScreenState();
+}
+
+class _PaymentScreenState extends State<PaymentScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final bookingVM = Provider.of<BookingViewModel>(context, listen: false);
+      // Áp dụng giảm giá theo cấp bậc tự động nếu chưa có voucher nào được chọn
+      if (bookingVM.selectedVoucher == null) {
+        bookingVM.applyVoucher('');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +37,12 @@ class PaymentScreen extends StatelessWidget {
         final seats = bookingVM.selectedSeats;
 
         if (movie == null || seats.isEmpty) {
-          return Scaffold(
-            appBar: AppBar(title: const Text('Thanh Toán')),
+          return PopScope(
+            onPopInvoked: (didPop) {
+              if (didPop) bookingVM.clearPaymentInfo();
+            },
+            child: Scaffold(
+              appBar: AppBar(title: const Text('Thanh Toán')),
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -40,11 +61,15 @@ class PaymentScreen extends StatelessWidget {
                 ],
               ),
             ),
-          );
+          ));
         }
 
-        return Scaffold(
-          appBar: AppBar(
+        return PopScope(
+          onPopInvoked: (didPop) {
+            if (didPop) bookingVM.clearPaymentInfo();
+          },
+          child: Scaffold(
+            appBar: AppBar(
             title: const Text('Thanh Toán', style: TextStyle(color: Colors.black)),
             backgroundColor: Colors.white,
             iconTheme: const IconThemeData(color: Colors.black),
@@ -288,7 +313,7 @@ class PaymentScreen extends StatelessWidget {
                   : const Text('XÁC NHẬN THANH TOÁN', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
             ),
           ),
-        );
+        ));
       },
     );
   }
@@ -335,3 +360,4 @@ class PaymentScreen extends StatelessWidget {
     );
   }
 }
+

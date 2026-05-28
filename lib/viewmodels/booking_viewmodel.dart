@@ -17,6 +17,8 @@ class SeatData {
   final bool isBooked;     // Đã được đặt chưa (trong DB)
   final bool isLockedByMe; // Ghế mình đang giữ tạm (trong Redis)
   final bool isLockedByOther; // Ghế người khác đang giữ (trong Redis)
+  final String status;     // Trạng thái khóa: 'holding', 'paying'
+  final String bookingCode; // Mã đơn hàng nếu đang paying
 
   SeatData({
     required this.maghe,
@@ -27,6 +29,8 @@ class SeatData {
     required this.isBooked,
     this.isLockedByMe = false,
     this.isLockedByOther = false,
+    this.status = 'holding',
+    this.bookingCode = '',
   });
 
   /// Tên hiển thị: VD "A1", "B3"
@@ -48,6 +52,8 @@ class SeatData {
       isBooked: json['isBooked'] == true,
       isLockedByMe: json['isLockedByMe'] == true,
       isLockedByOther: json['isLockedByOther'] == true,
+      status: json['status']?.toString() ?? 'holding',
+      bookingCode: json['bookingCode']?.toString() ?? '',
     );
   }
 }
@@ -303,12 +309,26 @@ class BookingViewModel extends ChangeNotifier {
       for (var s in lockedSeats) {
         final String sid = s['seatId'];
         final bool isYours = s['isYours'] == true;
+        final String status = s['status'] ?? 'holding';
+        final String bookingCode = s['bookingCode'] ?? '';
         
         if (isYours) {
           _selectedSeats.add(sid);
         }
         // Update seatMap status
-        _updateSeatLockStatus(sid, isLockedByMe: isYours, isLockedByOther: !isYours);
+        _updateSeatLockStatus(sid, isLockedByMe: isYours, isLockedByOther: !isYours, status: status, bookingCode: bookingCode);
+      }
+      notifyListeners();
+    });
+
+    // Lắng nghe khi ghế chuyển sang trạng thái thanh toán
+    _socketService.onSeatsPaying((data) {
+      final List seatIds = data['seatIds'] ?? [];
+      final String status = data['status'] ?? 'paying';
+      final String bookingCode = data['bookingCode'] ?? '';
+      
+      for (var sid in seatIds) {
+        _updateSeatLockStatus(sid, isLockedByOther: true, status: status, bookingCode: bookingCode);
       }
       notifyListeners();
     });
@@ -316,14 +336,16 @@ class BookingViewModel extends ChangeNotifier {
     // Lắng nghe khi có người khác lock ghế
     _socketService.onSeatLocked((data) {
       final String sid = data['seatId'];
-      _updateSeatLockStatus(sid, isLockedByOther: true);
+      final String status = data['status'] ?? 'holding';
+      final String bookingCode = data['bookingCode'] ?? '';
+      _updateSeatLockStatus(sid, isLockedByOther: true, status: status, bookingCode: bookingCode);
       notifyListeners();
     });
 
     // Lắng nghe khi ghế được giải phóng
     _socketService.onSeatUnlocked((data) {
       final String sid = data['seatId'];
-      _updateSeatLockStatus(sid, isLockedByMe: false, isLockedByOther: false);
+      _updateSeatLockStatus(sid, isLockedByMe: false, isLockedByOther: false, status: 'holding', bookingCode: '');
       
       // Nếu là ghế mình đang chọn mà bị server unlock (hết hạn)
       if (_selectedSeats.contains(sid)) {
@@ -336,7 +358,7 @@ class BookingViewModel extends ChangeNotifier {
     _socketService.onSeatsUnlockedBatch((data) {
       final List sids = data['seatIds'] ?? [];
       for (var sid in sids) {
-        _updateSeatLockStatus(sid, isLockedByMe: false, isLockedByOther: false);
+        _updateSeatLockStatus(sid, isLockedByMe: false, isLockedByOther: false, status: 'holding', bookingCode: '');
         _selectedSeats.remove(sid);
       }
       notifyListeners();
@@ -360,7 +382,7 @@ class BookingViewModel extends ChangeNotifier {
         if (!_selectedSeats.contains(sid)) {
           _selectedSeats.add(sid);
         }
-        _updateSeatLockStatus(sid, isLockedByMe: true);
+        _updateSeatLockStatus(sid, isLockedByMe: true, status: 'holding', bookingCode: '');
 
         // Always start or update timer – if it's the first lock or a shorter timeout
         final int currentMs = _secondsRemaining * 1000;
@@ -403,7 +425,7 @@ class BookingViewModel extends ChangeNotifier {
     });
   }
 
-  void _updateSeatLockStatus(String maghe, {bool? isLockedByMe, bool? isLockedByOther}) {
+  void _updateSeatLockStatus(String maghe, {bool? isLockedByMe, bool? isLockedByOther, String? status, String? bookingCode}) {
     final index = _seatMap.indexWhere((s) => s.maghe == maghe);
     if (index != -1) {
       final old = _seatMap[index];
@@ -416,6 +438,8 @@ class BookingViewModel extends ChangeNotifier {
         isBooked: old.isBooked,
         isLockedByMe: isLockedByMe ?? old.isLockedByMe,
         isLockedByOther: isLockedByOther ?? old.isLockedByOther,
+        status: status ?? old.status,
+        bookingCode: bookingCode ?? old.bookingCode,
       );
     }
   }
@@ -474,7 +498,11 @@ class BookingViewModel extends ChangeNotifier {
     final seatData = getSeatData(seatName);
     if (seatData == null || seatData.isBroken) return;
     if (seatData.isLockedByOther) {
-      _errorMessage = 'Ghế này đang được người khác giữ';
+      if (seatData.status == 'paying' && seatData.bookingCode.isNotEmpty) {
+        _errorMessage = 'Ghế này đang được thanh toán cho đơn hàng ${seatData.bookingCode}';
+      } else {
+        _errorMessage = 'Ghế này đang được người khác giữ';
+      }
       notifyListeners();
       return;
     }
@@ -524,6 +552,19 @@ class BookingViewModel extends ChangeNotifier {
       }
       notifyListeners();
     }
+  }
+
+  void clearCombos() {
+    _selectedCombos.clear();
+    notifyListeners();
+  }
+
+  void clearPaymentInfo() {
+    _selectedVoucher = null;
+    _bookingSummary = null;
+    _isApplyingVoucher = false;
+    _paymentMethod = 'momo';
+    notifyListeners();
   }
 
   int getComboQuantity(int comboId) {
@@ -698,6 +739,7 @@ class BookingViewModel extends ChangeNotifier {
       if (response['status'] == 'success') {
         _bookingResult = response['data']?['maDonDatVe'] ?? 'OK';
         _paymentUrl = response['data']?['paymentUrl']; // Lấy URL thanh toán từ backend
+        stopCountdown(); // Ngừng đếm ngược giữ ghế vì đã chuyển sang màn hình chờ thanh toán
         notifyListeners();
         return true;
       } else {
@@ -760,6 +802,10 @@ class BookingViewModel extends ChangeNotifier {
     _paymentUrl = null;
     _errorMessage = null;
     _selectedCombos.clear();
+    _bookingSummary = null;
+    _selectedVoucher = null;
+    _isApplyingVoucher = false;
+    _paymentMethod = 'momo';
     notifyListeners();
   }
 

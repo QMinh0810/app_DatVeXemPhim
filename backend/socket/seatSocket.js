@@ -59,6 +59,8 @@ function initSeatSocket(io) {
                     lockedSeats: lockedSeats.map(s => ({
                         seatId: s.seatId,
                         isYours: socket.userId && s.lockedBy === socket.userId,
+                        status: s.status,
+                        bookingCode: s.bookingCode,
                     }))
                 });
             } catch (err) {
@@ -100,6 +102,8 @@ function initSeatSocket(io) {
                     socket.to(`showtime:${showtimeId}`).emit('seat_locked', {
                         seatId,
                         isYours: false,
+                        status: 'holding',
+                        bookingCode: '',
                     });
 
                     console.log(`[Socket] 🔒 Ghế ${seatId} (suất ${showtimeId}) locked by user ${socket.userId} | earliestTimeout: ${earliestTimeoutMs}ms`);
@@ -191,12 +195,16 @@ function initSeatSocket(io) {
         bookingNS.to(`showtime:${showtimeId}`).emit('seats_confirmed', { seatIds });
     }
 
+    function broadcastSeatsPaying(showtimeId, seatIds, userId, bookingCode) {
+        bookingNS.to(`showtime:${showtimeId}`).emit('seats_paying', { seatIds, userId, bookingCode, status: 'paying' });
+    }
+
     function broadcastSeatsUnlocked(showtimeId, seatIds) {
         bookingNS.to(`showtime:${showtimeId}`).emit('seats_unlocked_batch', { seatIds });
     }
 
     // Export helpers để dùng trong controller
-    io._seatHelpers = { broadcastSeatsConfirmed, broadcastSeatsUnlocked };
+    io._seatHelpers = { broadcastSeatsConfirmed, broadcastSeatsPaying, broadcastSeatsUnlocked };
 }
 
 module.exports = { initSeatSocket };

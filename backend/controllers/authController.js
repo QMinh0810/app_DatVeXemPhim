@@ -153,36 +153,71 @@ exports.forgotPassword = async (req, res) => {
    }
 }
 
-exports.resetPassword = async (req, res) => {
+exports.verifyOTP = async (req, res) => {
    try {
-       const { email, otp, newPassword } = req.body;
-
-       // 1. Kiểm tra xem có yêu cầu reset cho email này không
+       let { email, otp } = req.body;
+       if (!email || !otp) {
+           return res.status(400).json({ status: 'error', message: 'Vui lòng cung cấp đầy đủ email và mã OTP' });
+       }
+       email = email.trim().toLowerCase();
+       
        const storedData = otpStore.get(email);
        if (!storedData) {
-           return res.status(400).json({ status: 'error', message: 'Không tìm thấy yêu cầu khôi phục mật khẩu cho email này' });
+           return res.status(400).json({ status: 'error', message: 'Không tìm thấy mã OTP cho email này' });
        }
-
-       // 2. Kiểm tra mã OTP
+       
        if (storedData.otp !== otp) {
            return res.status(400).json({ status: 'error', message: 'Mã xác nhận OTP không chính xác' });
        }
-
-       // 3. Kiểm tra hết hạn
+       
        if (Date.now() > storedData.expiresAt) {
-           otpStore.delete(email); // Xóa mã đã hết hạn
-           return res.status(400).json({ status: 'error', message: 'Mã OTP đã hết hạn (5 phút). Vui lòng yêu cầu mã mới.' });
+           otpStore.delete(email);
+           return res.status(400).json({ status: 'error', message: 'Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới.' });
        }
        
-       // 4. Mã hóa mật khẩu mới
+       // Tạo token tạm thời
+       const resetToken = jwt.sign({ email, purpose: 'reset_password' }, JWT_SECRET, { expiresIn: '15m' });
+       
+       // Xóa OTP ngay sau khi xác thực thành công
+       otpStore.delete(email);
+       
+       return res.json({
+           status: 'success',
+           message: 'Xác thực OTP thành công!',
+           resetToken
+       });
+   } catch(e) {
+       console.error("Verify OTP Error:", e);
+       res.status(500).json({ status: 'error', message: 'Lỗi server' });
+   }
+}
+
+exports.resetPassword = async (req, res) => {
+   try {
+       const { token, newPassword } = req.body;
+       if (!token || !newPassword) {
+           return res.status(400).json({ status: 'error', message: 'Vui lòng cung cấp token và mật khẩu mới' });
+       }
+
+       let decoded;
+       try {
+           decoded = jwt.verify(token, JWT_SECRET);
+       } catch (err) {
+           return res.status(400).json({ status: 'error', message: 'Token không hợp lệ hoặc đã hết hạn' });
+       }
+
+       if (decoded.purpose !== 'reset_password') {
+           return res.status(400).json({ status: 'error', message: 'Token không hợp lệ' });
+       }
+
+       const email = decoded.email;
+       
+       // Mã hóa mật khẩu mới
        const salt = await bcrypt.genSalt(10);
        const hashedPassword = await bcrypt.hash(newPassword, salt);
        
-       // 5. Cập nhật vào DB
+       // Cập nhật vào DB
        await db.query('UPDATE thongtintaikhoan SET matkhau = $1 WHERE email = $2', [hashedPassword, email]);
-
-       // 6. Xóa OTP sau khi dùng thành công (One-time use)
-       otpStore.delete(email);
 
        res.json({ status: 'success', message: 'Khôi phục và cập nhật mật khẩu thành công!' });
    } catch(e) {
@@ -190,6 +225,7 @@ exports.resetPassword = async (req, res) => {
        res.status(500).json({ status: 'error', message: 'Lỗi server' });
    }
 }
+
 
 
 exports.googleLogin = async (req, res) => {

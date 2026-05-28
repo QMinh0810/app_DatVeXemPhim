@@ -27,7 +27,7 @@ class PaymentWaitingScreen extends StatefulWidget {
 class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
   Timer? _pollingTimer;
   Timer? _countdownTimer;
-  int _remainingSeconds = 600; // Mặc định 10 phút, sẽ update từ API
+  int _remainingSeconds = 300; // 5 phút — đồng bộ với TTL paying trên Redis
   bool _isPaid = false;
   bool _isExpired = false;
   bool _isCancelling = false;
@@ -117,11 +117,8 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
       }
     } catch (e) {
       debugPrint('Polling error: $e');
-      if (mounted) {
-        setState(() {
-          _currentStatus = 'Lỗi kết nối máy chủ';
-        });
-      }
+      // Bỏ qua lỗi kết nối tạm thời để không làm gián đoạn UI của người dùng
+      // (khi quay lại từ app ngân hàng, mạng có thể bị rớt cục bộ một khoảnh khắc)
     }
   }
 
@@ -137,8 +134,14 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
       );
 
       if (order != null && mounted) {
-        Navigator.pushReplacement(
-          context,
+        final navigator = Navigator.of(context);
+        Provider.of<BookingViewModel>(context, listen: false).resetBooking();
+
+        navigator.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
+        navigator.push(
           MaterialPageRoute(
             builder: (context) => OrderTicketsScreen(order: order),
           ),
@@ -146,6 +149,7 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
       } else {
         // Fallback về trang chủ nếu không tìm thấy đơn hàng
         if (mounted) {
+          Provider.of<BookingViewModel>(context, listen: false).resetBooking();
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -155,6 +159,7 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
       }
     } catch (e) {
       if (mounted) {
+        Provider.of<BookingViewModel>(context, listen: false).resetBooking();
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -192,6 +197,29 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
         setState(() => _isCancelling = false);
         if (success) {
           _stopTimers();
+          bookingVM.resetBooking(); // Xóa sạch dữ liệu cũ (ghế, combo, giá...)
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Đơn hàng đã được huỷ. Ghế đã được giải phóng.',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF323232),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          // Xóa sạch stack điều hướng và về trang chủ để tránh giữ lại
+          // các màn hình cũ (seat_selection, combo_selection) có dữ liệu cũ
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (context) => const HomeScreen()),
@@ -200,7 +228,18 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
           return true;
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Không thể hủy đơn hàng lúc này.')),
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.white, size: 20),
+                  SizedBox(width: 10),
+                  Text('Không thể hủy đơn hàng lúc này.', style: TextStyle(color: Colors.white)),
+                ],
+              ),
+              backgroundColor: const Color(0xFFE51937),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
           );
           return false;
         }
@@ -269,7 +308,7 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
                           height: 160,
                           width: 160,
                           child: CircularProgressIndicator(
-                            value: _remainingSeconds / 600,
+                            value: _remainingSeconds / 300,
                             strokeWidth: 8,
                             backgroundColor: Colors.grey[200],
                             valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFE51937)),

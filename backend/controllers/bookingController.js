@@ -311,8 +311,14 @@ exports.createBooking = async (req, res) => {
         };
         await seatLockService.createTempBooking(maDonDatVe, sessionData);
 
-        // 7. Gia hạn TTL cho các seat locks (đảm bảo ghế không hết hạn trước khi thanh toán xong)
-        await seatLockService.extendUserLocks(showtimeId, userId);
+        // 7. Chuyển trạng thái các ghế sang paying và đặt TTL 5 phút
+        await seatLockService.setSeatsPayingStatus(showtimeId, seatIds, userId, maDonDatVe);
+
+        // Broadcast trạng thái paying mới tới tất cả các socket đang xem suất chiếu
+        const io = getIO();
+        if (io && io._seatHelpers) {
+            io._seatHelpers.broadcastSeatsPaying(showtimeId, seatIds, userId, maDonDatVe);
+        }
 
         // 8. Tạo URL thanh toán
         let paymentUrl = null;
@@ -753,13 +759,30 @@ exports.checkBookingStatus = async (req, res) => {
         `, [id]);
 
         if (result.rows.length === 0) {
+            // Kiểm tra trong Redis (đơn hàng tạm thời đang chờ thanh toán)
+            const session = await seatLockService.getTempBooking(id);
+            if (session) {
+                const timeoutSeconds = seatLockService.TTL; // 5 phút
+                const startTime = new Date(session.createdAt).getTime();
+                const now = new Date().getTime();
+                const elapsedSeconds = Math.floor((now - startTime) / 1000);
+                const remainingSeconds = Math.max(0, timeoutSeconds - elapsedSeconds);
+
+                return res.json({
+                    madondatve: id,
+                    status: 'pending',
+                    amount: session.totalPrice,
+                    remainingSeconds: remainingSeconds,
+                    isExpired: remainingSeconds <= 0
+                });
+            }
             return res.status(404).json({ message: "Không tìm thấy đơn hàng" });
         }
 
         const booking = result.rows[0];
         
-        // Tính toán thời gian còn lại (giới hạn 10 phút = 600 giây)
-        const timeoutSeconds = 600;
+        // Tính toán thời gian còn lại (giới hạn theo TTL của Redis)
+        const timeoutSeconds = seatLockService.TTL;
         const startTime = new Date(booking.ngaydatve).getTime();
         const now = new Date().getTime();
         const elapsedSeconds = Math.floor((now - startTime) / 1000);
@@ -859,14 +882,8 @@ async function updateOrderAfterPayment(maDonDatVe, transId) {
             const maVe = 'VE' + Date.now().toString().slice(-4) + i;
             const ticketPrice = seatPrices[seatIds[i]] || basePrice;
             const tenGhe = seatMap[seatIds[i]] || seatIds[i];
-            const qrData = JSON.stringify({
-                "Tên rạp": tenRapPhim,
-                "Phòng chiếu": tenPhong,
-                "Tên phim": tenPhim,
-                "Mã vé": maVe,
-                "Tên ghế": tenGhe,
-                "Giờ chiếu": gioChieu
-            }, null, 2);
+            const baseUrl = process.env.APP_URL || 'https://overall-preschool-nutlike.ngrok-free.dev';
+            const qrData = `${baseUrl}/ticket/${maVe}`;
             await client.query(
                 `INSERT INTO vexemphim (mavexemphim, qrcode, giave, maghe, malichchieu, madondatve, trangthai, thoigianhethan)
                  VALUES ($1, $2, $3, $4, $5, $6, 'active', $7)`,
@@ -976,6 +993,40 @@ async function handlePaymentFailure(maDonDatVe, transId, resultCode, message) {
             const io = getIO();
             if (io && io._seatHelpers) {
                 io._seatHelpers.broadcastSeatsUnlocked(showtimeId, unlockedSeats.length > 0 ? unlockedSeats : seatIds);
+            }
+
+            // 4.5. Lưu đơn đặt vé bị hủy và các vé bị hủy vào PostgreSQL để hiển thị trong lịch sử giao dịch và thỏa mãn điều kiện Foreign Key
+            const client = await db.connect();
+            try {
+                await client.query('BEGIN');
+                
+                // Lưu dondatve
+                await client.query(
+                    `INSERT INTO dondatve (madondatve, tongtien, trangthai, id_khach, ngaydatve)
+                     VALUES ($1, $2, 'cancelled', $3, CURRENT_TIMESTAMP)
+                     ON CONFLICT (madondatve) DO UPDATE SET trangthai = 'cancelled'`,
+                    [maDonDatVe, session.totalPrice || 0, userId]
+                );
+
+                // Lưu vexemphim với trangthai = 'cancelled'
+                const expireTime = new Date(Date.now() + 3 * 60 * 60 * 1000); // Hết hạn sau 3 giờ
+                for (let i = 0; i < seatIds.length; i++) {
+                    const maVe = 'VE' + Date.now().toString().slice(-4) + i;
+                    const ticketPrice = (session.seatPrices && session.seatPrices[seatIds[i]]) || session.basePrice || 0;
+                    await client.query(
+                        `INSERT INTO vexemphim (mavexemphim, qrcode, giave, maghe, malichchieu, madondatve, trangthai, thoigianhethan)
+                         VALUES ($1, $2, $3, $4, $5, $6, 'cancelled', $7)
+                         ON CONFLICT (mavexemphim) DO NOTHING`,
+                        [maVe, null, ticketPrice, seatIds[i], showtimeId, maDonDatVe, expireTime]
+                    );
+                }
+
+                await client.query('COMMIT');
+            } catch (dbErr) {
+                if (client) await client.query('ROLLBACK');
+                console.error('[handlePaymentFailure] Lỗi lưu đơn hàng & vé huỷ vào DB:', dbErr.message);
+            } finally {
+                client.release();
             }
 
             // 5. Gửi thông báo cho user

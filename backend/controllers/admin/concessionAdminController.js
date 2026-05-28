@@ -325,10 +325,20 @@ exports.createPOSConcessionOrder = async (req, res) => {
         // 2. Sinh mã đơn đặt vé đặc biệt cho POS (tiền tố POS)
         const maDonDatVe = 'POS' + Date.now().toString().slice(-7);
 
-        // 3. Insert dondatve (id_khach = req.admin.id - nhân viên quầy)
+        // 3. Xác định tài khoản khách vãng lai GUEST_POS để gán cho đơn POS
+        //    Nếu không tìm thấy thì fallback tạm về id_khach = 10 (đã seed sẵn)
+        const guestRes = await client.query(
+            `SELECT id_khach FROM thongtintaikhoan WHERE mataikhoan = 'GUEST_POS' LIMIT 1`
+        );
+        const guestId =
+            guestRes.rows.length > 0
+                ? guestRes.rows[0].id_khach
+                : 10;
+
+        // 3.1. Insert dondatve (id_khach = khách vãng lai, KHÔNG dùng id nhân viên)
         await client.query(
             `INSERT INTO dondatve (madondatve, tongtien, trangthai, id_khach) VALUES ($1, $2, 'paid', $3)`,
-            [maDonDatVe, tongtien, req.admin.id]
+            [maDonDatVe, tongtien, guestId]
         );
 
         // 4. Insert thongtinthanhtoan (Mặc định cash do không cần lưu chi tiết)

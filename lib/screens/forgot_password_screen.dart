@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import 'change_password_screen.dart';
+import 'change_forgot_password_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -40,7 +40,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
   }
 
-  void _verifyOTPAndReset() async {
+  void _verifyOTP() async {
     final email = _emailController.text.trim();
     final otp = _otpController.text.trim();
 
@@ -52,16 +52,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Gửi mật khẩu mặc định là '9' theo yêu cầu
-      final response = await ApiService.resetPassword(email, otp, '9');
+      final response = await ApiService.verifyOTP(email, otp);
       
       if (mounted) {
         if (response['status'] == 'success') {
           _showSnackBar('Xác thực OTP thành công!', isError: false);
-          // Chuyển sang màn hình đổi mật khẩu
+          final String resetToken = response['resetToken'] ?? '';
+          // Chuyển sang màn hình đặt lại mật khẩu mới với token
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
+            MaterialPageRoute(
+              builder: (context) => ChangeForgotPasswordScreen(resetToken: resetToken),
+            ),
           );
         } else {
           _showSnackBar(response['message'] ?? 'Mã OTP không chính xác', isError: true);
@@ -156,7 +158,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
               // Confirm Button
               ElevatedButton(
-                onPressed: _isLoading ? null : _verifyOTPAndReset,
+                onPressed: _isLoading ? null : _verifyOTP,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFE51937),
                   padding: const EdgeInsets.symmetric(vertical: 16),

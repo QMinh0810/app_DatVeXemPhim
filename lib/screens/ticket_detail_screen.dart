@@ -203,20 +203,7 @@ class TicketDetailScreen extends StatelessWidget {
               ]
             ),
             child: QrImageView(
-              data: () {
-                final qrCodeStr = ticket['qrCode']?.toString() ?? '';
-                if (qrCodeStr.startsWith('{') && qrCodeStr.endsWith('}')) {
-                  return qrCodeStr;
-                }
-                return const JsonEncoder.withIndent('  ').convert({
-                  'Tên rạp': order['tenRapPhim']?.toString() ?? '',
-                  'Phòng chiếu': order['tenPhong']?.toString() ?? '',
-                  'Tên phim': order['tenPhim']?.toString() ?? '',
-                  'Mã vé': ticket['maVe']?.toString() ?? '',
-                  'Tên ghế': ticket['tenGhe']?.toString() ?? '',
-                  'Giờ chiếu': order['gioChieu']?.toString() ?? ''
-                });
-              }(),
+              data: ticket['qrcode']?.toString() ?? ticket['qrCode']?.toString() ?? ticket['maVe']?.toString() ?? 'Lỗi QR',
               version: QrVersions.auto,
               size: 180.0,
               eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Color(0xFF1A1A1A)),

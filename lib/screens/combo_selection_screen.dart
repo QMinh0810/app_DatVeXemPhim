@@ -23,7 +23,13 @@ class _ComboSelectionScreenState extends State<ComboSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      onPopInvoked: (didPop) {
+        if (didPop) {
+          context.read<BookingViewModel>().clearCombos();
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('Chọn Bắp Nước', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
@@ -196,6 +202,6 @@ class _ComboSelectionScreenState extends State<ComboSelectionScreen> {
           );
         },
       ),
-    );
+    ));
   }
 }
