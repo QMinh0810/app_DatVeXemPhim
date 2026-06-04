@@ -41,9 +41,10 @@ class _HomeScreenState extends State<HomeScreen> {
               HorizontalImageList(
                 title: 'Tin mới & Ưu đãi',
                 imageUrls: [
-                  'https://image.tmdb.org/t/p/w500/8Y43POKjjKDGI9MH89NW0NAzzp8.jpg',
-                  'https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2TGbiROox.jpg',
-                  'https://upload.wikimedia.org/wikipedia/vi/a/a8/Mai_2024_poster.jpg',
+                  'lib/images/event1.jpg',
+                  'lib/images/event2.png',
+                  'lib/images/event3.jpg',
+                  'lib/images/event4.jpg',
                 ],
               ),
               SizedBox(height: 32),

@@ -47,18 +47,31 @@ class HorizontalImageList extends StatelessWidget {
             itemBuilder: (context, index) {
               return ClipRRect(
                 borderRadius: BorderRadius.circular(borderRadius),
-                child: Image.network(
-                  imageUrls[index],
-                  width: imageWidth,
-                  height: imageHeight,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    width: imageWidth,
-                    height: imageHeight,
-                    color: Colors.grey[300],
-                    child: const Center(child: Icon(Icons.image)),
-                  ),
-                ),
+                child: imageUrls[index].startsWith('http')
+                    ? Image.network(
+                        imageUrls[index],
+                        width: imageWidth,
+                        height: imageHeight,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: imageWidth,
+                          height: imageHeight,
+                          color: Colors.grey[300],
+                          child: const Center(child: Icon(Icons.image)),
+                        ),
+                      )
+                    : Image.asset(
+                        imageUrls[index],
+                        width: imageWidth,
+                        height: imageHeight,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: imageWidth,
+                          height: imageHeight,
+                          color: Colors.grey[300],
+                          child: const Center(child: Icon(Icons.image)),
+                        ),
+                      ),
               );
             },
           ),

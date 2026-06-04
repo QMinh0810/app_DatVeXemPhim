@@ -63,12 +63,55 @@ exports.updateProfile = async (req, res) => {
     }
 };
 
-// Xem lịch sử đặt vé
+// Xem lịch sử đặt vé (có phân trang)
+// Query params: page (default 1), limit (default 10), status (vd: 'paid', 'cancelled')
 exports.getBookingHistory = async (req, res) => {
     try {
         const userId = req.user.id;
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+        const status = req.query.status; // undefined = lấy tất cả trạng thái
+        const offset = (page - 1) * limit;
 
-        const query = `
+        // Xây dựng điều kiện lọc trạng thái
+        const params = [userId];
+        let statusCondition = '';
+        if (status) {
+            // Hỗ trợ nhiều status cách nhau bởi dấu phẩy, vd: status=paid,completed
+            const statusList = status.split(',').map(s => s.trim()).filter(Boolean);
+            if (statusList.length === 1) {
+                params.push(statusList[0]);
+                statusCondition = `AND d.trangthai = $${params.length}`;
+            } else if (statusList.length > 1) {
+                params.push(statusList);
+                statusCondition = `AND d.trangthai = ANY($${params.length})`;
+            }
+        }
+
+        // Query đếm tổng số đơn hàng (để tính totalPages)
+        const countQuery = `
+            SELECT COUNT(DISTINCT d.madondatve) as total
+            FROM dondatve d
+            WHERE d.id_khach = $1
+            ${statusCondition}
+        `;
+        const countResult = await db.query(countQuery, params);
+        const total = parseInt(countResult.rows[0].total) || 0;
+        const totalPages = Math.ceil(total / limit);
+
+        // Query lấy danh sách đơn phân trang
+        // Dùng subquery để lấy đúng page theo đơn hàng trước, rồi join vé
+        const pageParams = [...params, limit, offset];
+        const pageParamOffset = params.length;
+        const dataQuery = `
+            WITH paginated_orders AS (
+                SELECT DISTINCT d.madondatve, d.ngaydatve
+                FROM dondatve d
+                WHERE d.id_khach = $1
+                ${statusCondition}
+                ORDER BY d.ngaydatve DESC
+                LIMIT $${pageParamOffset + 1} OFFSET $${pageParamOffset + 2}
+            )
             SELECT d.madondatve, d.tongtien, d.trangthai as order_status, d.ngaydatve,
                    v.mavexemphim, v.giave as ticket_price, v.maghe, v.trangthai as ticket_status, v.qrcode,
                    (g.mahangghe || g.soghe) as tenghe,
@@ -76,18 +119,18 @@ exports.getBookingHistory = async (req, res) => {
                    TO_CHAR(lc.giochieu, 'HH24:MI') as giochieu,
                    p.tenphim, p.poster_url,
                    r.tenrapphim, r.diachi, pr.tenphong
-            FROM dondatve d
+            FROM paginated_orders po
+            JOIN dondatve d ON d.madondatve = po.madondatve
             JOIN vexemphim v ON d.madondatve = v.madondatve
             LEFT JOIN ghengoi g ON v.maghe = g.maghe
             JOIN lichchieu lc ON v.malichchieu = lc.malichchieu
             JOIN phim p ON lc.maphim = p.maphim
             JOIN phongrapphim pr ON lc.maphong = pr.maphong
             JOIN rapphim r ON pr.marapphim = r.marapphim
-            WHERE d.id_khach = $1
             ORDER BY d.ngaydatve DESC
         `;
 
-        const result = await db.query(query, [userId]);
+        const result = await db.query(dataQuery, pageParams);
 
         // Tổ chức lại dữ liệu theo đơn hàng
         const history = [];
@@ -121,7 +164,17 @@ exports.getBookingHistory = async (req, res) => {
             });
         });
 
-        res.json({ status: 'success', data: history });
+        res.json({
+            status: 'success',
+            data: history,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages,
+                hasMore: page < totalPages
+            }
+        });
     } catch (e) {
         console.error(e);
         res.status(500).json({ status: 'error', message: 'Lỗi lấy lịch sử đặt vé' });

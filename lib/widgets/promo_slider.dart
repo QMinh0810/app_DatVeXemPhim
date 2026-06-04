@@ -14,9 +14,10 @@ class _PromoSliderState extends State<PromoSlider> {
   Timer? _timer;
 
   final List<String> promoImages = [
-    'https://image.tmdb.org/t/p/w500/8Y43POKjjKDGI9MH89NW0NAzzp8.jpg',
-    'https://image.tmdb.org/t/p/w500/1pdfLvkbY9ohJlCjQH2TGbiROox.jpg',
-    'https://upload.wikimedia.org/wikipedia/vi/a/a8/Mai_2024_poster.jpg',
+    'lib/images/event1.jpg',
+    'lib/images/event2.png',
+    'lib/images/event3.jpg',
+    'lib/images/event4.jpg',
   ];
 
   @override
@@ -66,14 +67,25 @@ class _PromoSliderState extends State<PromoSlider> {
             },
             itemCount: promoImages.length,
             itemBuilder: (context, index) {
-              return Image.network(
-                promoImages[index],
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: Colors.grey[300],
-                  child: const Center(child: Icon(Icons.image, size: 40)),
-                ),
-              );
+              final imagePath = promoImages[index];
+              final isNetwork = imagePath.startsWith('http') || imagePath.startsWith('https');
+              return isNetwork
+                  ? Image.network(
+                      imagePath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: Colors.grey[300],
+                        child: const Center(child: Icon(Icons.image, size: 40)),
+                      ),
+                    )
+                  : Image.asset(
+                      imagePath,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: Colors.grey[300],
+                        child: const Center(child: Icon(Icons.image, size: 40)),
+                      ),
+                    );
             },
           ),
           Positioned(

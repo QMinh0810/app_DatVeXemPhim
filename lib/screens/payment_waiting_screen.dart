@@ -127,7 +127,8 @@ class _PaymentWaitingScreenState extends State<PaymentWaitingScreen> {
     setState(() => _isLoadingTarget = true);
     try {
       // Vì API backend chưa có endpoint lấy 1 đơn hàng theo ID, ta sẽ lấy history và filter
-      final history = await ApiService.fetchBookingHistory();
+      final response = await ApiService.fetchBookingHistory();
+      final List<dynamic> history = response['data'] ?? [];
       final order = history.firstWhere(
         (h) => h['maDonDatVe'] == widget.bookingId,
         orElse: () => null,

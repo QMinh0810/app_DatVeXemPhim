@@ -275,11 +275,22 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
-  /// Xem lịch sử đặt vé
-  static Future<List<dynamic>> fetchBookingHistory() async {
-    final res = await http.get(Uri.parse('$baseUrl/users/history'), headers: _headers);
-    final body = jsonDecode(res.body);
-    return body['data'] ?? [];
+  /// Xem lịch sử đặt vé (có phân trang)
+  /// Trả về Map gồm `data` (List) và `pagination` ({ total, page, limit, totalPages, hasMore })
+  /// [status]: lọc trạng thái, vd 'paid', 'cancelled', 'paid,completed'. Null = tất cả.
+  static Future<Map<String, dynamic>> fetchBookingHistory({
+    int page = 1,
+    int limit = 10,
+    String? status,
+  }) async {
+    final params = <String, String>{
+      'page': '$page',
+      'limit': '$limit',
+    };
+    if (status != null) params['status'] = status;
+    final uri = Uri.parse('$baseUrl/users/history').replace(queryParameters: params);
+    final res = await http.get(uri, headers: _headers);
+    return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   /// Đổi mật khẩu
