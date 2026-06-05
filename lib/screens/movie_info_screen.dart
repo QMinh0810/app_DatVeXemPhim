@@ -406,119 +406,7 @@ class _MovieInfoScreenState extends State<MovieInfoScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.7,
-          maxChildSize: 0.95,
-          minChildSize: 0.4,
-          builder: (context, controller) {
-            return Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Text(
-                    'Đánh giá phim',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: FutureBuilder<List<dynamic>>(
-                    future: ApiService.fetchReviews(widget.movie.id),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      } else if (snapshot.hasError) {
-                        return Center(child: Text('Lỗi: ${snapshot.error}'));
-                      } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return const Center(child: Text('Chưa có bình luận nào.'));
-                      }
-
-                      final reviews = snapshot.data!.map((json) => ReviewModel.fromJson(json)).toList();
-
-                      return ListView.separated(
-                        controller: controller,
-                        itemCount: reviews.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1, indent: 64),
-                        itemBuilder: (context, index) {
-                          final review = reviews[index];
-                          DateTime? time;
-                          try {
-                            time = DateTime.parse(review.thoiDiemDanhGia);
-                          } catch (_) {}
-
-                          return Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: Colors.grey[200],
-                                  backgroundImage: review.anhDaiDien != null && review.anhDaiDien!.isNotEmpty
-                                      ? NetworkImage(review.anhDaiDien!)
-                                      : NetworkImage(
-                                          'https://ui-avatars.com/api/?name=${Uri.encodeComponent(review.hoTen)}&background=random'),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            review.hoTen,
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                          ),
-                                          if (time != null)
-                                            Text(
-                                              DateFormat('dd/MM/yyyy HH:mm').format(time),
-                                              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                                            ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.star, color: Colors.amber, size: 16),
-                                          const SizedBox(width: 4),
-                                          Text('${review.danhGia}/10',
-                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        review.noiDung,
-                                        style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black87),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (context) => _ReviewBottomSheetWidget(movieId: widget.movie.id),
     );
   }
 
@@ -638,4 +526,291 @@ class _TrailerDialogState extends State<_TrailerDialog> {
   }
 }
 
+class _ReviewBottomSheetWidget extends StatefulWidget {
+  final String movieId;
 
+  const _ReviewBottomSheetWidget({Key? key, required this.movieId}) : super(key: key);
+
+  @override
+  State<_ReviewBottomSheetWidget> createState() => _ReviewBottomSheetWidgetState();
+}
+
+class _ReviewBottomSheetWidgetState extends State<_ReviewBottomSheetWidget> {
+  bool _isLoading = true;
+  String? _error;
+  List<ReviewModel> _reviews = [];
+  bool _canReview = false;
+  
+  int _rating = 10;
+  final TextEditingController _reviewController = TextEditingController();
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        ApiService.fetchReviews(widget.movieId),
+        ApiService.checkCanReview(widget.movieId),
+      ]);
+
+      final reviewsData = results[0] as List<dynamic>;
+      final canReviewData = results[1] as Map<String, dynamic>;
+
+      _reviews = reviewsData.map((json) => ReviewModel.fromJson(json)).toList();
+      _canReview = canReviewData['canReview'] ?? false;
+      
+      final existingReview = canReviewData['existingReview'];
+      if (existingReview != null) {
+        _rating = existingReview['danhgia'] ?? 10;
+        _reviewController.text = existingReview['noidung'] ?? '';
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _submitReview() async {
+    final content = _reviewController.text.trim();
+    if (content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập nội dung đánh giá')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final res = await ApiService.postReview(widget.movieId, content, _rating);
+      if (res['status'] == 'success') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message'] ?? 'Đã gửi đánh giá thành công')),
+        );
+        // Tải lại danh sách
+        _loadData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message'] ?? 'Lỗi khi gửi đánh giá')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Có lỗi xảy ra, vui lòng thử lại sau')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _reviewController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      maxChildSize: 0.95,
+      minChildSize: 0.4,
+      builder: (context, controller) {
+        return Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text(
+                'Đánh giá phim',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+            const Divider(height: 1),
+            if (_isLoading)
+              const Expanded(child: Center(child: CircularProgressIndicator()))
+            else if (_error != null)
+              Expanded(child: Center(child: Text('Lỗi: $_error')))
+            else
+              Expanded(
+                child: ListView(
+                  controller: controller,
+                  children: [
+                    if (_canReview) _buildReviewForm(),
+                    if (!_canReview)
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          'Chỉ những khách hàng đã mua vé và xem phim này mới có thể viết đánh giá.',
+                          style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    const Divider(height: 1),
+                    if (_reviews.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(32.0),
+                        child: Center(child: Text('Chưa có bình luận nào.')),
+                      )
+                    else
+                      ..._reviews.map((review) => _buildReviewItem(review)).toList(),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildReviewForm() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Đánh giá của bạn', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(10, (index) {
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _rating = index + 1;
+                  });
+                },
+                child: Icon(
+                  index < _rating ? Icons.star : Icons.star_border,
+                  color: Colors.amber,
+                  size: 28,
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _reviewController,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'Nhập nội dung đánh giá...',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSubmitting ? null : _submitReview,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE51937),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: _isSubmitting
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('GỬI ĐÁNH GIÁ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewItem(ReviewModel review) {
+    DateTime? time;
+    try {
+      time = DateTime.parse(review.thoiDiemDanhGia);
+    } catch (_) {}
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: Colors.grey[200],
+                backgroundImage: review.anhDaiDien != null && review.anhDaiDien!.isNotEmpty
+                    ? NetworkImage(review.anhDaiDien!)
+                    : NetworkImage(
+                        'https://ui-avatars.com/api/?name=${Uri.encodeComponent(review.hoTen)}&background=random'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          review.hoTen,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        if (time != null)
+                          Text(
+                            DateFormat('dd/MM/yyyy HH:mm').format(time),
+                            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.star, color: Colors.amber, size: 16),
+                        const SizedBox(width: 4),
+                        Text('${review.danhGia}/10',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      review.noiDung,
+                      style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black87),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1, indent: 64),
+      ],
+    );
+  }
+}

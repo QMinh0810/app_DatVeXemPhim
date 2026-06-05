@@ -237,6 +237,19 @@ class ApiService {
     return body['data'] ?? [];
   }
 
+  /// Kiểm tra quyền đánh giá (có được đánh giá không và lấy đánh giá cũ nếu có)
+  static Future<Map<String, dynamic>> checkCanReview(String movieId) async {
+    // Nếu chưa đăng nhập thì mặc định không được review
+    if (_token == null) return {'canReview': false, 'existingReview': null};
+    
+    final res = await http.get(
+      Uri.parse('$baseUrl/reviews/$movieId/can-review'),
+      headers: _headers,
+    );
+    final body = jsonDecode(res.body);
+    return body;
+  }
+
   /// Đăng bình luận
   static Future<Map<String, dynamic>> postReview(String movieId, String noiDung, int danhGia) async {
     final res = await http.post(

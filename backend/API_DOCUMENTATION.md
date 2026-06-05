@@ -1146,6 +1146,118 @@ Content-Disposition: attachment; filename=BaoCao_Thang_2024-04.xlsx
 
 ---
 
+### 9.3. Kiểm tra quyền đánh giá phim (Khách hàng)
+
+Kiểm tra xem khách hàng có thể đánh giá phim hay không (phải mua vé và phim đã chiếu xong).
+
+| | |
+|---|---|
+| **URL** | `GET /api/reviews/:movieId/can-review` |
+| **`:movieId`** | `maphim` |
+| **Auth** | Bearer Token |
+
+**Response `200`:**
+
+```json
+{
+  "status": "success",
+  "canReview": true,
+  "existingReview": {
+    "noidung": "Phim hay",
+    "danhgia": 8
+  }
+}
+```
+
+> `existingReview` sẽ là `null` nếu khách hàng chưa từng đánh giá phim này.
+
+---
+
+### 9.4. Danh sách bình luận theo phim (Khách hàng)
+
+Xem tất cả các bình luận của phim từ phía người dùng (không cần đăng nhập).
+
+| | |
+|---|---|
+| **URL** | `GET /api/reviews/:movieId` |
+| **`:movieId`** | `maphim` |
+
+**Response `200`:**
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "mabinhluan": "BL567890",
+      "maphim": "P001",
+      "noidung": "Phim xem rất bánh cuốn!",
+      "danhgia": 9,
+      "id_khach": 1,
+      "thoidiemdanhgia": "2024-04-05T08:15:00.000Z",
+      "noidungreply": null,
+      "id_nhanvien": null,
+      "hoten": "Nguyễn Văn A",
+      "anhdaidien": null
+    }
+  ]
+}
+```
+
+---
+
+### 9.5. Đăng bình luận & đánh giá (Khách hàng)
+
+Khách hàng đăng bình luận và điểm đánh giá cho một bộ phim. Nếu khách hàng đã từng đánh giá, hệ thống sẽ **cập nhật** bình luận cũ.
+
+| | |
+|---|---|
+| **URL** | `POST /api/reviews/:movieId` |
+| **`:movieId`** | `maphim` |
+| **Auth** | Bearer Token |
+
+**Request body:**
+
+```json
+{
+  "noiDung": "Phim quá hay, đáng để xem lại lần nữa!",
+  "danhGia": 10
+}
+```
+
+| Field | Kiểu | Bắt buộc | Mô tả |
+|-------|------|----------|--------|
+| `noiDung` | string | Có | Nội dung bình luận |
+| `danhGia` | number | Có | Điểm đánh giá (từ 1 đến 10) |
+
+**Response `201` (Tạo mới) / `200` (Cập nhật):**
+
+```json
+{
+  "status": "success",
+  "message": "Cảm ơn bạn đã đánh giá phim",
+  "data": {
+    "mabinhluan": "BL567890",
+    "maphim": "P001",
+    "noidung": "Phim quá hay, đáng để xem lại lần nữa!",
+    "danhgia": 10,
+    "id_khach": 1,
+    "thoidiemdanhgia": "2024-04-05T08:15:00.000Z"
+  }
+}
+```
+
+**Lỗi `403`:**
+
+```json
+{
+  "status": "error",
+  "message": "Bạn cần mua vé và xem phim trước khi đánh giá"
+}
+```
+
+---
+
 ## 10. Bảng tóm tắt endpoint
 
 | # | Method | Endpoint | Mô tả |
@@ -1185,6 +1297,8 @@ Content-Disposition: attachment; filename=BaoCao_Thang_2024-04.xlsx
 | 33 | `GET` | `/api/admin/reports/monthly` | Báo cáo XLSX |
 | 34 | `GET` | `/api/admin/movies/:id/reviews` | Bình luận phim |
 | 35 | `POST` | `/api/admin/reviews/:id/reply` | Trả lời bình luận |
+| 36 | `GET` | `/api/reviews/:movieId` | Xem danh sách bình luận (Khách hàng) |
+| 37 | `POST` | `/api/reviews/:movieId` | Đăng bình luận & đánh giá (Khách hàng) |
 
 ---
 
